@@ -1,6 +1,7 @@
 # LLM Chat Navigator
 
 > NOTE: A significant portion of the source code of this project is written by codex.
+>
 > I have
 >
 > - fully reviewed the plans codex presented
