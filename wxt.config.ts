@@ -1,6 +1,21 @@
 import { defineConfig } from 'wxt';
+import tailwindcss from '@tailwindcss/vite';
+import path from 'node:path';
 
-// See https://wxt.dev/api/config.html
 export default defineConfig({
-  modules: ['@wxt-dev/module-react'],
+  manifest: {
+    name: 'LLM Chat Navigator',
+    description: 'A floating ChatGPT navigation UI.',
+    permissions: ['storage'],
+    host_permissions: ['https://chatgpt.com/*', 'https://chat.openai.com/*'],
+  },
+
+  vite: () => ({
+    plugins: [tailwindcss()],
+    resolve: {
+      alias: {
+        '@': path.resolve(__dirname, '.'),
+      },
+    },
+  }),
 });
