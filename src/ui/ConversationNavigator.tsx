@@ -13,6 +13,8 @@ import {
   type NodeMouseHandler,
   type NodeProps,
   type NodeTypes,
+  type ReactFlowInstance,
+  type Viewport,
 } from '@xyflow/react';
 import { Edit3, Loader2, LocateFixed, RefreshCw, TreePine, X } from 'lucide-react';
 
@@ -24,7 +26,7 @@ import { visibleText } from '@/src/shared/chatgptTree';
 import type { ConversationNode, NavigatorSnapshot } from '@/src/shared/types';
 
 export type NavigatorApi = {
-  fetchSnapshot(): Promise<NavigatorSnapshot>;
+  fetchSnapshot(options?: { force?: boolean }): Promise<NavigatorSnapshot>;
   navigateToNode(nodeId: string): Promise<void>;
   editMessage(nodeId: string, text: string): Promise<void>;
   submitReply(parentNodeId: string, text: string): Promise<void>;
@@ -269,12 +271,14 @@ export default function ConversationNavigator({ api, compact = false }: Conversa
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [editDialog, setEditDialog] = useState<EditDialogState | null>(null);
   const flowWrapperRef = useRef<HTMLDivElement>(null);
+  const savedViewportRef = useRef<Viewport | null>(null);
+  const fitInitialViewRef = useRef(false);
 
-  async function refresh() {
+  async function refresh(options: { force?: boolean } = {}) {
     setLoading(true);
     setError(null);
     try {
-      const next = await api.fetchSnapshot();
+      const next = await api.fetchSnapshot(options);
       setSnapshot(next);
       setSelectedNodeId(selectedConversationNodeId(next));
     } catch (err) {
@@ -283,6 +287,24 @@ export default function ConversationNavigator({ api, compact = false }: Conversa
       setLoading(false);
     }
   }
+
+  const handleFlowInit = useCallback((instance: ReactFlowInstance<MessageFlowNode, Edge>) => {
+    if (savedViewportRef.current) {
+      void instance.setViewport(savedViewportRef.current);
+      return;
+    }
+
+    if (!fitInitialViewRef.current) {
+      fitInitialViewRef.current = true;
+      window.setTimeout(() => {
+        void instance.fitView({ padding: 0.2, minZoom: 0.35, maxZoom: 1.1 });
+      }, 0);
+    }
+  }, []);
+
+  const handleViewportChange = useCallback((viewport: Viewport) => {
+    savedViewportRef.current = viewport;
+  }, []);
 
   useEffect(() => {
     void refresh();
@@ -304,7 +326,7 @@ export default function ConversationNavigator({ api, compact = false }: Conversa
     setError(null);
     try {
       await action();
-      if (refreshAfter) await refresh();
+      if (refreshAfter) await refresh({ force: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -357,7 +379,13 @@ export default function ConversationNavigator({ api, compact = false }: Conversa
             {snapshot?.tree.title ?? 'Current conversation'}
           </div>
         </div>
-        <Button size="icon" variant="ghost" onClick={() => void refresh()} disabled={loading} title="Refresh tree">
+        <Button
+          size="icon"
+          variant="ghost"
+          onClick={() => void refresh({ force: true })}
+          disabled={loading}
+          title="Refresh tree"
+        >
           {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
         </Button>
       </div>
@@ -399,10 +427,10 @@ export default function ConversationNavigator({ api, compact = false }: Conversa
             nodesDraggable={false}
             nodesConnectable={false}
             elementsSelectable
-            fitView
-            fitViewOptions={{ padding: 0.2, minZoom: 0.35, maxZoom: 1.1 }}
             minZoom={0.2}
             maxZoom={1.8}
+            onInit={handleFlowInit}
+            onViewportChange={handleViewportChange}
             onNodeClick={(_, node) => {
               setSelectedNodeId(node.id);
               setContextMenu(null);

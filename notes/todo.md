@@ -8,6 +8,10 @@
 
 - [ ] When navigate, we should move top of the message to top of the page, and highlight the message somehow
 
+- [ ] It says "Could not find visible message node xxx" when the node is far away from current node
+
+- [ ] Switch branch on clicking node from an inactive branch
+
 - [x] Can we hide the popup button after clicking it and expanding the popup pane?
 
 ## Bug

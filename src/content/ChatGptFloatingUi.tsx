@@ -231,6 +231,7 @@ export default function ChatGptFloatingUi() {
   const defaultConfig = useMemo(() => defaultProviderUiConfig(), []);
   const defaultButtonPosition = useMemo(() => getDefaultPosition(), []);
   const [open, setOpen] = useState(false);
+  const [hasOpened, setHasOpened] = useState(false);
   const [position, setPosition] = useState<Position>(() => defaultButtonPosition);
   const [paneRect, setPaneRect] = useState<PaneRect>(() => paneRectFromConfig(defaultButtonPosition, defaultConfig.pane));
   const [paneSide, setPaneSide] = useState<PaneSide>(defaultConfig.pane.side);
@@ -395,6 +396,7 @@ export default function ChatGptFloatingUi() {
           paneRect: nextPaneRect,
         };
         setPaneRect(nextPaneRect);
+        setHasOpened(true);
         setOpen(true);
       }
     }
@@ -463,7 +465,7 @@ export default function ChatGptFloatingUi() {
         </Button>
       ) : null}
 
-      {open ? (
+      {hasOpened ? (
         <Card
           className="pointer-events-auto fixed overflow-hidden bg-white text-foreground shadow-2xl"
           style={{
@@ -472,6 +474,7 @@ export default function ChatGptFloatingUi() {
             width: paneRect.width,
             height: paneRect.height,
             backgroundColor: '#fff',
+            display: open ? undefined : 'none',
           }}
         >
           <Button
