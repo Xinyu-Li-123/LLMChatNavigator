@@ -346,7 +346,7 @@ export default function ConversationNavigator({ api, compact = false }: Conversa
   }, [api, editDialog]);
 
   const body = (
-    <div className="relative flex h-full min-h-0 flex-col bg-background text-foreground">
+    <div className="relative flex h-full min-h-0 flex-col bg-white text-foreground" style={{ backgroundColor: '#fff' }}>
       <div className="flex items-center gap-2 p-3">
         <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground">
           <TreePine className="h-4 w-4" />
@@ -388,12 +388,14 @@ export default function ConversationNavigator({ api, compact = false }: Conversa
         </div>
       ) : null}
 
-      <div ref={flowWrapperRef} className="relative min-h-0 flex-1 overflow-hidden bg-background">
+      <div ref={flowWrapperRef} className="relative min-h-0 flex-1 overflow-hidden bg-white" style={{ backgroundColor: '#fff' }}>
         {flowElements.nodes.length > 0 ? (
           <ReactFlow
+            className="bg-white"
             nodes={flowElements.nodes}
             edges={flowElements.edges}
             nodeTypes={nodeTypes}
+            style={{ backgroundColor: '#fff' }}
             nodesDraggable={false}
             nodesConnectable={false}
             elementsSelectable

@@ -381,15 +381,16 @@ export default function ChatGptFloatingUi() {
 
       {open ? (
         <Card
-          className="pointer-events-auto fixed overflow-hidden bg-background text-foreground shadow-2xl"
+          className="pointer-events-auto fixed overflow-hidden bg-white text-foreground shadow-2xl"
           style={{
             left: paneRect.left,
             top: paneRect.top,
             width: paneRect.width,
             height: paneRect.height,
+            backgroundColor: '#fff',
           }}
         >
-          <div className="h-full w-full overflow-hidden bg-background">
+          <div className="h-full w-full overflow-hidden bg-white" style={{ backgroundColor: '#fff' }}>
             <ConversationNavigator api={contentApi} compact />
           </div>
 
