@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
-import { FolderTree, GripHorizontal, Maximize2, Minimize2, X } from 'lucide-react';
+import { FolderTree, Maximize2, Minimize2, Minus, TreePine } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -459,8 +459,20 @@ export default function ChatGptFloatingUi() {
             onPointerUp={handleDragPointerUp}
             onPointerCancel={handleDragPointerUp}
           >
-            <GripHorizontal className="h-4 w-4 text-muted-foreground" />
+            <TreePine className="h-4 w-4 text-muted-foreground" />
             <div className="min-w-0 flex-1 truncate text-sm font-medium">LLM Chat Navigator</div>
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              aria-label="Collapse LLM Chat Navigator"
+              title="Collapse"
+              className="h-8 w-8 cursor-pointer"
+              onPointerDown={stopControlPointerDown}
+              onClick={handleCollapse}
+            >
+              <Minus className="h-4 w-4" />
+            </Button>
             <Button
               type="button"
               size="icon"
@@ -472,18 +484,6 @@ export default function ChatGptFloatingUi() {
               onClick={handleFullscreenToggle}
             >
               {fullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-            </Button>
-            <Button
-              type="button"
-              size="icon"
-              variant="ghost"
-              aria-label="Collapse LLM Chat Navigator"
-              title="Collapse"
-              className="h-8 w-8 cursor-pointer"
-              onPointerDown={stopControlPointerDown}
-              onClick={handleCollapse}
-            >
-              <X className="h-4 w-4" />
             </Button>
           </div>
 

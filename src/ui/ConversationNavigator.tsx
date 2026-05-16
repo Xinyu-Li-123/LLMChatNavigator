@@ -16,7 +16,7 @@ import {
   type ReactFlowInstance,
   type Viewport,
 } from '@xyflow/react';
-import { Edit3, Loader2, LocateFixed, RefreshCw, TreePine, X } from 'lucide-react';
+import { Edit3, Loader2, LocateFixed, RefreshCw, X } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -369,15 +369,9 @@ export default function ConversationNavigator({ api, compact = false }: Conversa
 
   const body = (
     <div className="relative flex h-full min-h-0 flex-col bg-white text-foreground" style={{ backgroundColor: '#fff' }}>
-      <div className="flex items-center gap-2 p-3">
-        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-          <TreePine className="h-4 w-4" />
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-sm font-semibold">ChatGPT Tree Navigator</div>
-          <div className="truncate text-xs text-muted-foreground">
-            {snapshot?.tree.title ?? 'Current conversation'}
-          </div>
+      <div className="flex min-h-10 items-center gap-2 px-3 py-1.5">
+        <div className="min-w-0 flex-1 truncate text-sm font-medium">
+          {snapshot?.tree.title ?? 'Current conversation'}
         </div>
         <Button
           size="icon"
