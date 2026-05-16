@@ -1,5 +1,14 @@
 # LLM Chat Navigator
 
+> NOTE: A significant portion of the source code of this project is written by codex.
+> I have
+>
+> - fully reviewed the plans codex presented
+>
+> But I have not
+>
+> - fully reviewed every line of code.
+
 A WXT + React + TypeScript browser extension that adds a ChatGPT conversation-tree navigator.
 
 ## Implemented scope

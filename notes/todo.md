@@ -12,6 +12,8 @@
 
 - [ ] Switch branch on clicking node from an inactive branch
 
+- [ ] Add a small view of full graph at top right of popup window
+
 - [x] Can we hide the popup button after clicking it and expanding the popup pane?
 
 ## Bug
