@@ -388,7 +388,7 @@ export default function ConversationNavigator({ api, compact = false }: Conversa
         </div>
       ) : null}
 
-      <div ref={flowWrapperRef} className="relative min-h-0 flex-1 overflow-hidden bg-muted/20">
+      <div ref={flowWrapperRef} className="relative min-h-0 flex-1 overflow-hidden bg-background">
         {flowElements.nodes.length > 0 ? (
           <ReactFlow
             nodes={flowElements.nodes}
