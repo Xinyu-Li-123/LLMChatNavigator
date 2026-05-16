@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { FolderTree, LayoutPanelTop } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -452,13 +453,13 @@ export default function ChatGptFloatingUi() {
           size="icon"
           aria-label="Open LLM Chat Navigator"
           title="Open LLM Chat Navigator"
-          className="pointer-events-auto fixed h-12 w-12 rounded-none shadow-xl select-none cursor-grab active:cursor-grabbing"
-          style={{ left: position.x, top: position.y }}
+          className="pointer-events-auto fixed h-12 w-12 rounded-none bg-white text-foreground shadow-xl select-none cursor-grab active:cursor-grabbing hover:bg-white"
+          style={{ left: position.x, top: position.y, backgroundColor: '#fff' }}
           onPointerDown={(event) => handleLauncherPointerDown(event, 'button')}
           onPointerMove={handleLauncherPointerMove}
           onPointerUp={handleLauncherPointerUp}
         >
-          Tree
+          <FolderTree className="h-5 w-5" />
         </Button>
       ) : null}
 
@@ -479,18 +480,18 @@ export default function ChatGptFloatingUi() {
             aria-label="Close LLM Chat Navigator"
             title="Close LLM Chat Navigator"
             className={cn(
-              'pointer-events-auto absolute z-50 h-12 w-12 rounded-none shadow-md select-none cursor-grab active:cursor-grabbing',
+              'pointer-events-auto absolute z-50 h-12 w-12 rounded-none bg-white text-foreground select-none cursor-grab active:cursor-grabbing hover:bg-white',
               paneHandle.edge === 'top' && 'border-t-0',
               paneHandle.edge === 'right' && 'border-r-0',
               paneHandle.edge === 'bottom' && 'border-b-0',
               paneHandle.edge === 'left' && 'border-l-0',
             )}
-            style={{ left: paneHandle.left, top: paneHandle.top }}
+            style={{ left: paneHandle.left, top: paneHandle.top, backgroundColor: '#fff' }}
             onPointerDown={(event) => handleLauncherPointerDown(event, 'pane')}
             onPointerMove={handleLauncherPointerMove}
             onPointerUp={handleLauncherPointerUp}
           >
-            Tree
+            <LayoutPanelTop className="h-5 w-5" />
           </Button>
 
           <div className="h-full w-full overflow-hidden rounded-xl bg-white" style={{ backgroundColor: '#fff' }}>
