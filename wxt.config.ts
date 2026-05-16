@@ -6,7 +6,7 @@ export default defineConfig({
   manifest: {
     name: 'LLM Chat Navigator',
     description: 'A floating ChatGPT navigation UI.',
-    permissions: ['storage'],
+    permissions: ['storage', 'tabs', 'webRequest'],
     host_permissions: ['https://chatgpt.com/*', 'https://chat.openai.com/*'],
   },
 
