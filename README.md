@@ -8,9 +8,7 @@ A WXT + React + TypeScript browser extension that adds a ChatGPT conversation-tr
 - Captures ChatGPT `Authorization` request headers from normal `/backend-api/*` traffic, modeled after the reference extension.
 - Fetches `/backend-api/conversation/{conversationId}` from the background script.
 - Normalizes ChatGPT's `mapping` graph into an extension-owned `ConversationTree` model.
-- Displays the tree in both:
-  - a draggable Shadow DOM floating panel on ChatGPT pages
-  - the toolbar popup
+- Displays the tree in a draggable Shadow DOM floating panel on ChatGPT pages.
 - Supports node search, current-path highlighting, branch-count badges, click-to-navigate, edit, and branch-reply-by-editing-visible-child.
 
 ## Development
@@ -34,9 +32,6 @@ entrypoints/background.ts
 
 entrypoints/content.tsx
   Mounts the floating React UI and exposes content-script message handlers.
-
-entrypoints/popup/App.tsx
-  Renders the same navigator UI in the browser-action popup and delegates actions to the active ChatGPT tab.
 
 src/shared/
   Provider-neutral types and ChatGPT tree normalization/path logic.

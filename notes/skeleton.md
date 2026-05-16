@@ -15,10 +15,6 @@ This WXT project now implements a ChatGPT-only conversation-tree navigator inspi
   - Registers content-script message handlers for tree fetch, navigation, edit, and branch reply.
   - Mounts `ChatGptFloatingUi` inside a WXT Shadow DOM UI container.
 
-- `entrypoints/popup/App.tsx`
-  - Renders the same tree UI in a 430x640 popup.
-  - Sends actions to the active ChatGPT tab's content script.
-
 ## Shared model
 
 - `src/shared/types.ts` defines the normalized `ConversationTree`, `ConversationNode`, `BranchStep`, and message types.
