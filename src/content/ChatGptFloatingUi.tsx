@@ -33,12 +33,19 @@ type ResizeHandle = ResizeDirection & {
   className: string;
 };
 
+type PaneEdge = 'top' | 'right' | 'bottom' | 'left';
+
+type PaneHandleGeometry = {
+  edge: PaneEdge;
+  left: number;
+  top: number;
+};
+
 const LEGACY_BUTTON_POSITION_STORAGE_KEY = 'llm-chat-navigator:floating-button-position';
 
 const PROVIDER = 'chatgpt';
 const BUTTON_SIZE = 48;
 const MARGIN = 12;
-const PANE_GAP = 12;
 const MIN_PANE_WIDTH = 320;
 const MIN_PANE_HEIGHT = 360;
 
@@ -93,6 +100,13 @@ function clampPosition(position: Position): Position {
   };
 }
 
+function clampHandlePosition(position: Position): Position {
+  return {
+    x: clamp(position.x, MARGIN, window.innerWidth - BUTTON_SIZE - MARGIN),
+    y: clamp(position.y, MARGIN, window.innerHeight - BUTTON_SIZE - MARGIN),
+  };
+}
+
 function clampPaneRect(rect: PaneRect): PaneRect {
   const size = clampPaneSize(rect.width, rect.height);
 
@@ -112,29 +126,55 @@ function resolvedPaneSide(buttonPosition: Position, side: PaneSide): 'left' | 'r
 function anchoredPaneRect(buttonPosition: Position, pane: FloatingPaneConfig): PaneRect {
   const size = clampPaneSize(pane.width, pane.height);
   const side = resolvedPaneSide(buttonPosition, pane.side);
-  const left = side === 'left'
-    ? buttonPosition.x - size.width - PANE_GAP
-    : buttonPosition.x + BUTTON_SIZE + PANE_GAP;
+  const left = side === 'left' ? buttonPosition.x + BUTTON_SIZE - size.width : buttonPosition.x;
+  const desiredTop = buttonPosition.y - 80;
+  const topIncludingButton = clamp(
+    desiredTop,
+    buttonPosition.y + BUTTON_SIZE - size.height,
+    buttonPosition.y,
+  );
 
   return clampPaneRect({
     left,
-    top: buttonPosition.y - 80,
+    top: topIncludingButton,
     width: size.width,
     height: size.height,
   });
 }
 
 function paneRectFromConfig(buttonPosition: Position, pane: FloatingPaneConfig): PaneRect {
-  if (pane.position) {
-    return clampPaneRect({
-      left: pane.position.x,
-      top: pane.position.y,
-      width: pane.width,
-      height: pane.height,
-    });
+  return anchoredPaneRect(buttonPosition, pane);
+}
+
+function paneHandleGeometry(paneRect: PaneRect, buttonPosition: Position): PaneHandleGeometry {
+  const relativePosition = {
+    x: clamp(buttonPosition.x - paneRect.left, 0, paneRect.width - BUTTON_SIZE),
+    y: clamp(buttonPosition.y - paneRect.top, 0, paneRect.height - BUTTON_SIZE),
+  };
+
+  const distances: Record<PaneEdge, number> = {
+    top: relativePosition.y,
+    right: paneRect.width - BUTTON_SIZE - relativePosition.x,
+    bottom: paneRect.height - BUTTON_SIZE - relativePosition.y,
+    left: relativePosition.x,
+  };
+
+  const edge = (Object.entries(distances) as Array<[PaneEdge, number]>)
+    .sort((a, b) => a[1] - b[1])[0][0];
+
+  if (edge === 'top' || edge === 'bottom') {
+    return {
+      edge,
+      left: relativePosition.x,
+      top: edge === 'top' ? 0 : paneRect.height - BUTTON_SIZE,
+    };
   }
 
-  return anchoredPaneRect(buttonPosition, pane);
+  return {
+    edge,
+    left: edge === 'left' ? 0 : paneRect.width - BUTTON_SIZE,
+    top: relativePosition.y,
+  };
 }
 
 function providerConfigFromState(
@@ -193,6 +233,7 @@ export default function ChatGptFloatingUi() {
   const [position, setPosition] = useState<Position>(() => defaultButtonPosition);
   const [paneRect, setPaneRect] = useState<PaneRect>(() => paneRectFromConfig(defaultButtonPosition, defaultConfig.pane));
   const [paneSide, setPaneSide] = useState<PaneSide>(defaultConfig.pane.side);
+  const paneHandle = useMemo(() => paneHandleGeometry(paneRect, position), [paneRect, position]);
 
   const latestStateRef = useRef({
     position,
@@ -203,10 +244,13 @@ export default function ChatGptFloatingUi() {
   const dragRef = useRef({
     dragging: false,
     moved: false,
+    mode: 'button' as 'button' | 'pane',
     startPointerX: 0,
     startPointerY: 0,
     startX: 0,
     startY: 0,
+    startPaneLeft: 0,
+    startPaneTop: 0,
   });
 
   const resizeRef = useRef<{
@@ -269,21 +313,24 @@ export default function ChatGptFloatingUi() {
     void saveProviderUiConfig(PROVIDER, providerConfigFromState(latest.position, latest.paneRect, latest.paneSide));
   }
 
-  function handleButtonPointerDown(event: ReactPointerEvent<HTMLButtonElement>) {
+  function handleLauncherPointerDown(event: ReactPointerEvent<HTMLButtonElement>, mode: 'button' | 'pane') {
     event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
 
     dragRef.current = {
       dragging: true,
       moved: false,
+      mode,
       startPointerX: event.clientX,
       startPointerY: event.clientY,
       startX: position.x,
       startY: position.y,
+      startPaneLeft: paneRect.left,
+      startPaneTop: paneRect.top,
     };
   }
 
-  function handleButtonPointerMove(event: ReactPointerEvent<HTMLButtonElement>) {
+  function handleLauncherPointerMove(event: ReactPointerEvent<HTMLButtonElement>) {
     const drag = dragRef.current;
     if (!drag.dragging) return;
 
@@ -291,11 +338,13 @@ export default function ChatGptFloatingUi() {
     const dy = event.clientY - drag.startPointerY;
     if (Math.abs(dx) > 3 || Math.abs(dy) > 3) drag.moved = true;
 
-    const nextPosition = clampPosition({ x: drag.startX + dx, y: drag.startY + dy });
+    const nextPosition = drag.mode === 'button'
+      ? clampPosition({ x: drag.startX + dx, y: drag.startY + dy })
+      : clampHandlePosition({ x: drag.startX + dx, y: drag.startY + dy });
     latestStateRef.current = { ...latestStateRef.current, position: nextPosition };
     setPosition(nextPosition);
 
-    if (open) {
+    if (drag.mode === 'button' && open) {
       const nextPaneRect = anchoredPaneRect(nextPosition, {
         width: latestStateRef.current.paneRect.width,
         height: latestStateRef.current.paneRect.height,
@@ -308,15 +357,46 @@ export default function ChatGptFloatingUi() {
       };
       setPaneRect(nextPaneRect);
     }
+
+    if (drag.mode === 'pane') {
+      const nextPaneRect = clampPaneRect({
+        ...latestStateRef.current.paneRect,
+        left: drag.startPaneLeft + dx,
+        top: drag.startPaneTop + dy,
+      });
+      latestStateRef.current = {
+        ...latestStateRef.current,
+        position: nextPosition,
+        paneRect: nextPaneRect,
+      };
+      setPaneRect(nextPaneRect);
+    }
   }
 
-  function handleButtonPointerUp(event: ReactPointerEvent<HTMLButtonElement>) {
+  function handleLauncherPointerUp(event: ReactPointerEvent<HTMLButtonElement>) {
     const drag = dragRef.current;
     event.currentTarget.releasePointerCapture(event.pointerId);
     drag.dragging = false;
 
     persistCurrentState();
-    if (!drag.moved) setOpen((value) => !value);
+    if (!drag.moved) {
+      if (open) {
+        setOpen(false);
+      } else {
+        const nextPaneRect = anchoredPaneRect(latestStateRef.current.position, {
+          width: latestStateRef.current.paneRect.width,
+          height: latestStateRef.current.paneRect.height,
+          position: null,
+          side: latestStateRef.current.paneSide,
+        });
+        latestStateRef.current = {
+          ...latestStateRef.current,
+          paneRect: nextPaneRect,
+        };
+        setPaneRect(nextPaneRect);
+        setOpen(true);
+      }
+    }
   }
 
   function handleResizePointerDown(
@@ -366,18 +446,21 @@ export default function ChatGptFloatingUi() {
 
   return (
     <div className="fixed inset-0 z-[2147483647] pointer-events-none">
-      <Button
-        type="button"
-        size="icon"
-        aria-label="Toggle LLM Chat Navigator"
-        className="pointer-events-auto fixed h-12 w-12 rounded-full shadow-xl select-none cursor-grab active:cursor-grabbing"
-        style={{ left: position.x, top: position.y }}
-        onPointerDown={handleButtonPointerDown}
-        onPointerMove={handleButtonPointerMove}
-        onPointerUp={handleButtonPointerUp}
-      >
-        Tree
-      </Button>
+      {!open ? (
+        <Button
+          type="button"
+          size="icon"
+          aria-label="Open LLM Chat Navigator"
+          title="Open LLM Chat Navigator"
+          className="pointer-events-auto fixed h-12 w-12 rounded-none shadow-xl select-none cursor-grab active:cursor-grabbing"
+          style={{ left: position.x, top: position.y }}
+          onPointerDown={(event) => handleLauncherPointerDown(event, 'button')}
+          onPointerMove={handleLauncherPointerMove}
+          onPointerUp={handleLauncherPointerUp}
+        >
+          Tree
+        </Button>
+      ) : null}
 
       {open ? (
         <Card
@@ -390,7 +473,27 @@ export default function ChatGptFloatingUi() {
             backgroundColor: '#fff',
           }}
         >
-          <div className="h-full w-full overflow-hidden bg-white" style={{ backgroundColor: '#fff' }}>
+          <Button
+            type="button"
+            size="icon"
+            aria-label="Close LLM Chat Navigator"
+            title="Close LLM Chat Navigator"
+            className={cn(
+              'pointer-events-auto absolute z-50 h-12 w-12 rounded-none shadow-md select-none cursor-grab active:cursor-grabbing',
+              paneHandle.edge === 'top' && 'border-t-0',
+              paneHandle.edge === 'right' && 'border-r-0',
+              paneHandle.edge === 'bottom' && 'border-b-0',
+              paneHandle.edge === 'left' && 'border-l-0',
+            )}
+            style={{ left: paneHandle.left, top: paneHandle.top }}
+            onPointerDown={(event) => handleLauncherPointerDown(event, 'pane')}
+            onPointerMove={handleLauncherPointerMove}
+            onPointerUp={handleLauncherPointerUp}
+          >
+            Tree
+          </Button>
+
+          <div className="h-full w-full overflow-hidden rounded-xl bg-white" style={{ backgroundColor: '#fff' }}>
             <ConversationNavigator api={contentApi} compact />
           </div>
 
