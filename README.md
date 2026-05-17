@@ -12,6 +12,16 @@
 
 A WXT + React + TypeScript browser extension that adds a ChatGPT conversation-tree navigator.
 
+## Demo
+
+Chat LLM Navigator
+
+![](./doc/res/demo-expanded.png)
+
+You can also collapse the navigator overlay to be this
+
+![](./doc/res/demo-collapsed.png)
+
 ## Implemented scope
 
 - ChatGPT only for now (`https://chatgpt.com/*` and `https://chat.openai.com/*`).
