@@ -23,6 +23,7 @@ export type NavigatorTheme = 'light' | 'dark';
 
 export type ExtensionUiConfig = {
   theme: NavigatorTheme;
+  utilityRowCollapsed: boolean;
 };
 
 export type NavigatorUiConfig = Partial<Record<ChatProvider, ProviderUiConfig>>;
@@ -32,6 +33,7 @@ export const EXTENSION_UI_CONFIG_STORAGE_KEY = 'llm-chat-navigator:extension-ui-
 
 const DEFAULT_EXTENSION_CONFIG: ExtensionUiConfig = {
   theme: 'light',
+  utilityRowCollapsed: false,
 };
 
 const DEFAULT_PROVIDER_CONFIG: ProviderUiConfig = {
@@ -73,6 +75,9 @@ export function normalizeExtensionUiConfig(value: unknown): ExtensionUiConfig {
   const candidate = value as Partial<ExtensionUiConfig>;
   return {
     theme: isNavigatorTheme(candidate.theme) ? candidate.theme : defaults.theme,
+    utilityRowCollapsed: typeof candidate.utilityRowCollapsed === 'boolean'
+      ? candidate.utilityRowCollapsed
+      : defaults.utilityRowCollapsed,
   };
 }
 

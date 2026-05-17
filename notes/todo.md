@@ -14,9 +14,13 @@
 
 - [ ] Add a small view of full graph at top right of popup window
 
+- [ ] In footer bar, add a button to go back to the selected message without changing zoom level
+
 - [x] Can we hide the popup button after clicking it and expanding the popup pane?
 
 ## Bug
+
+- [ ] ChatGPT has pagination in infinite-scroll style. We need some way to allow navigating to messages that are not loaded in current page
 
 ## Maintenance
 

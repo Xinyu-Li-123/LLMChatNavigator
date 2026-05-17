@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
-import { FolderTree, Maximize2, Minimize2, Minus, TreePine } from 'lucide-react';
+import { FolderTree, Maximize2, Minimize2, Minus } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -199,6 +199,8 @@ export default function ChatGptFloatingUi() {
   const [open, setOpen] = useState(false);
   const [hasOpened, setHasOpened] = useState(false);
   const [theme, setTheme] = useState<NavigatorTheme>(defaultExtensionConfig.theme);
+  const [conversationTitle, setConversationTitle] = useState('Current conversation');
+  const [utilityRowCollapsed, setUtilityRowCollapsed] = useState(defaultExtensionConfig.utilityRowCollapsed);
   const [position, setPosition] = useState<Position>(() => defaultButtonPosition);
   const [paneRect, setPaneRect] = useState<PaneRect>(() => paneRectFromConfig(defaultConfig.pane));
   const [paneSide, setPaneSide] = useState<PaneSide>(defaultConfig.pane.side);
@@ -250,6 +252,7 @@ export default function ChatGptFloatingUi() {
       const nextPosition = clampPosition(savedConfig.floatingButtonPosition ?? legacyPosition ?? getDefaultPosition());
       const nextPaneRect = paneRectFromConfig(savedConfig.pane);
       setTheme(savedExtensionConfig.theme);
+      setUtilityRowCollapsed(savedExtensionConfig.utilityRowCollapsed);
       setPosition(nextPosition);
       setPaneSide(savedConfig.pane.side);
       setPaneRect(nextPaneRect);
@@ -299,9 +302,14 @@ export default function ChatGptFloatingUi() {
   function handleThemeToggle() {
     setTheme((current) => {
       const next: NavigatorTheme = current === 'dark' ? 'light' : 'dark';
-      void saveExtensionUiConfig({ theme: next });
+      void saveExtensionUiConfig({ theme: next, utilityRowCollapsed });
       return next;
     });
+  }
+
+  function handleUtilityRowCollapsedChange(collapsed: boolean) {
+    setUtilityRowCollapsed(collapsed);
+    void saveExtensionUiConfig({ theme, utilityRowCollapsed: collapsed });
   }
 
   function handleDragPointerDown(event: ReactPointerEvent<HTMLElement>, mode: 'button' | 'pane') {
@@ -473,8 +481,7 @@ export default function ChatGptFloatingUi() {
             onPointerUp={handleDragPointerUp}
             onPointerCancel={handleDragPointerUp}
           >
-            <TreePine className="h-4 w-4 text-muted-foreground" />
-            <div className="min-w-0 flex-1 truncate text-sm font-medium">LLM Chat Navigator</div>
+            <div className="min-w-0 flex-1 truncate text-sm font-medium">{conversationTitle}</div>
             <Button
               type="button"
               size="icon"
@@ -502,7 +509,15 @@ export default function ChatGptFloatingUi() {
           </div>
 
           <div className="min-h-0 flex-1 overflow-hidden rounded-xl bg-background">
-            <ConversationNavigator api={contentApi} compact theme={theme} onToggleTheme={handleThemeToggle} />
+            <ConversationNavigator
+              api={contentApi}
+              compact
+              theme={theme}
+              onToggleTheme={handleThemeToggle}
+              utilityRowCollapsed={utilityRowCollapsed}
+              onUtilityRowCollapsedChange={handleUtilityRowCollapsedChange}
+              onTitleChange={setConversationTitle}
+            />
           </div>
 
           {RESIZE_HANDLES.map((handle) => (

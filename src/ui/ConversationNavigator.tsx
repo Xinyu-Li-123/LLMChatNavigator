@@ -16,7 +16,7 @@ import {
   type ReactFlowInstance,
   type Viewport,
 } from '@xyflow/react';
-import { Edit3, Loader2, LocateFixed, Moon, RefreshCw, Sun, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Edit3, Loader2, LocateFixed, Moon, RefreshCw, Search, Sun, X } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -38,6 +38,9 @@ type ConversationNavigatorProps = {
   compact?: boolean;
   theme?: NavigatorTheme;
   onToggleTheme?: () => void;
+  utilityRowCollapsed?: boolean;
+  onUtilityRowCollapsedChange?: (collapsed: boolean) => void;
+  onTitleChange?: (title: string) => void;
 };
 
 type ContextMenuState = {
@@ -280,10 +283,13 @@ export default function ConversationNavigator({
   compact = false,
   theme = 'light',
   onToggleTheme,
+  utilityRowCollapsed = false,
+  onUtilityRowCollapsedChange,
+  onTitleChange,
 }: ConversationNavigatorProps) {
   const [snapshot, setSnapshot] = useState<NavigatorSnapshot | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
-  const [query, setQuery] = useState('');
+  const query = '';
   const [loading, setLoading] = useState(false);
   const [busyAction, setBusyAction] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -328,6 +334,10 @@ export default function ConversationNavigator({
   useEffect(() => {
     void refresh();
   }, []);
+
+  useEffect(() => {
+    onTitleChange?.(snapshot?.tree.title ?? 'Current conversation');
+  }, [onTitleChange, snapshot]);
 
   const displayTree = useMemo(() => buildDisplayTree(snapshot, query), [query, snapshot]);
 
@@ -388,59 +398,84 @@ export default function ConversationNavigator({
 
   const body = (
     <div className="relative flex h-full min-h-0 flex-col bg-background text-foreground">
-      <div className="flex min-h-10 items-center gap-2 px-3 py-1.5">
-        <div className="min-w-0 flex-1 truncate text-sm font-medium">
-          {snapshot?.tree.title ?? 'Current conversation'}
-        </div>
-        {onToggleTheme ? (
-          <Button
-            size="icon"
-            variant="ghost"
-            onClick={onToggleTheme}
-            title={theme === 'dark' ? 'Use light mode' : 'Use dark mode'}
-            aria-label={theme === 'dark' ? 'Use light mode' : 'Use dark mode'}
-          >
-            {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-          </Button>
-        ) : null}
-        <Button
-          size="icon"
-          variant="ghost"
-          onClick={() => void refresh({ force: true })}
-          disabled={loading}
-          title="Refresh tree"
-        >
-          {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-        </Button>
-      </div>
-
-      <Separator />
-
-      <div className="space-y-2 p-3">
-        <input
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder="Search messages..."
-          className="h-9 w-full rounded-md border bg-background px-3 text-sm outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring"
-        />
-        {snapshot ? (
-          <div className="flex gap-2 text-xs text-muted-foreground">
-            <span>{displayTree.conversationNodeCount} conversation messages</span>
-            <span>|</span>
-            <span>{flowElements.nodes.length} shown</span>
-            <span>|</span>
-            <span>{snapshot.visibleMissingNodeIds.length} hidden/not rendered</span>
-          </div>
-        ) : null}
-      </div>
-
       {error ? (
-        <div className="mx-3 mb-2 rounded-md border border-destructive/40 bg-destructive/10 p-2 text-xs text-destructive">
+        <div className="mx-3 mt-3 rounded-md border border-destructive/40 bg-destructive/10 p-2 text-xs text-destructive">
           {error}
         </div>
       ) : null}
 
-      <div ref={flowWrapperRef} className="relative min-h-0 flex-1 overflow-hidden bg-background">
+      <div
+        ref={flowWrapperRef}
+        className={cn(
+          'relative min-h-0 flex-1 overflow-hidden bg-background',
+          '[&_.react-flow__controls]:overflow-hidden [&_.react-flow__controls]:rounded-xl [&_.react-flow__controls]:border [&_.react-flow__controls]:border-border [&_.react-flow__controls]:bg-card/95 [&_.react-flow__controls]:shadow-lg [&_.react-flow__controls-button]:h-11 [&_.react-flow__controls-button]:w-11 [&_.react-flow__controls-button]:border-border [&_.react-flow__controls-button]:bg-transparent [&_.react-flow__controls-button>svg]:h-5 [&_.react-flow__controls-button>svg]:w-5',
+        )}
+      >
+        {utilityRowCollapsed ? (
+          <div className="absolute right-0 top-3 z-20">
+            <Button
+              type="button"
+              variant="outline"
+              className="h-9 w-9 rounded-r-none rounded-l-md border-r-0 bg-card/95 px-2 shadow-lg backdrop-blur"
+              title="Expand toolbar"
+              aria-label="Expand toolbar"
+              onClick={() => onUtilityRowCollapsedChange?.(false)}
+            >
+              <ChevronLeft className="h-5 w-5" />
+            </Button>
+          </div>
+        ) : (
+          <div className="absolute right-3 top-3 z-20 flex items-center rounded-md border bg-card/95 shadow-lg backdrop-blur">
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              className="h-9 w-9"
+              title="Search conversations"
+              aria-label="Search conversations"
+              onClick={() => { }}
+            >
+              <Search className="h-5 w-5" />
+            </Button>
+            {onToggleTheme ? (
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                className="h-9 w-9"
+                onClick={onToggleTheme}
+                title={theme === 'dark' ? 'Use light mode' : 'Use dark mode'}
+                aria-label={theme === 'dark' ? 'Use light mode' : 'Use dark mode'}
+              >
+                {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+              </Button>
+            ) : null}
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              className="h-9 w-9"
+              onClick={() => void refresh({ force: true })}
+              disabled={loading}
+              title="Refresh tree"
+              aria-label="Refresh tree"
+            >
+              {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <RefreshCw className="h-5 w-5" />}
+            </Button>
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              className="h-9 w-9"
+              title="Collapse toolbar"
+              aria-label="Collapse toolbar"
+              onClick={() => onUtilityRowCollapsedChange?.(true)}
+            >
+              <ChevronRight className="h-5 w-5" />
+            </Button>
+          </div>
+        )}
+
         {flowElements.nodes.length > 0 ? (
           <ReactFlow
             className="bg-background"
