@@ -10,7 +10,7 @@
 >
 > - fully reviewed every line of code.
 
-A WXT + React + TypeScript browser extension that adds a ChatGPT conversation-tree navigator.
+A WXT + React + TypeScript browser extension that adds a ChatGPT conversation-tree navigator. This project is heavily inspired by [ChatTree](https://chromewebstore.google.com/detail/ichiiknkackionkhdadajbffjmfhkhmn?utm_source=item-share-cb)
 
 ## Demo
 
