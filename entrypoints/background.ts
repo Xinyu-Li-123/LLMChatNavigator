@@ -1,3 +1,5 @@
+// TODO: Refactor this whole background script into provide-agnostic and provider-specific parts
+
 import type { ApiResult, ChatGptBackgroundRequest, ChatGptConversationResponse } from '@/src/shared/types';
 
 type StoredHeader = { name: string; value?: string };
@@ -35,7 +37,7 @@ function hasAuthorization(headers: StoredHeader[] | undefined): headers is Store
 }
 
 /**
- * Install a listener that capture the request header that contains the authorization for backend api. Later, we can reuse this header to make request to backend.
+ * Install a listener that captures the request header that contains the authorization for backend api. Later, we can reuse this header to make request to backend.
  */
 function installAuthHeaderCapture(): void {
   const listener = (details: { requestHeaders?: StoredHeader[] }) => {
@@ -66,11 +68,17 @@ function installAuthHeaderCapture(): void {
   }
 }
 
-async function waitForCapturedHeaders(): Promise<StoredHeader[]> {
-  for (let attempt = 0; attempt < 4; attempt++) {
+/** 
+ * Wait for auth header to be captured. 
+ *
+ * @param maxAttempts - Max number of attempts we check if auth header is captured
+ * @param delayMs - millisecond we wait between attempts
+ */
+async function waitForCapturedHeaders(maxAttempts: number = 4, delayMs: number = 400): Promise<StoredHeader[]> {
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
     const headers = await loadHeaders();
     if (hasAuthorization(headers)) return headers;
-    await new Promise((resolve) => setTimeout(resolve, 400));
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
   }
   throw new Error('No ChatGPT Authorization header captured yet. Refresh the ChatGPT tab, then open the navigator again.');
 }
@@ -104,10 +112,12 @@ export default defineBackground(() => {
   browser.runtime.onMessage.addListener((message: ChatGptBackgroundRequest) => {
     if (!message || typeof message !== 'object' || !('type' in message)) return undefined;
 
+    // TODO: Make message a union over all allowed message types
     if (message.type === 'LLM_NAV_FETCH_CHATGPT_CONVERSATION') {
       return fetchChatGptConversation(message.conversationId).then(ok<ChatGptConversationResponse>).catch(fail);
     }
 
+    // TODO: Either use this msg type or remove this handler
     if (message.type === 'LLM_NAV_GET_CAPTURE_STATUS') {
       return loadHeaders().then((headers) => ok({ hasAuthorization: hasAuthorization(headers ?? undefined) })).catch(fail);
     }
