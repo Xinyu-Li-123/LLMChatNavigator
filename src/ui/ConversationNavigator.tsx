@@ -416,7 +416,8 @@ export default function ConversationNavigator({
             <Button
               type="button"
               variant="outline"
-              className="h-9 w-9 rounded-r-none rounded-l-md border-r-0 bg-card/95 px-2 shadow-lg backdrop-blur"
+              size="icon"
+              className="h-9 w-6 rounded-r-none rounded-l-md border-r-0 bg-card/95 p-0 shadow-lg backdrop-blur"
               title="Expand toolbar"
               aria-label="Expand toolbar"
               onClick={() => onUtilityRowCollapsedChange?.(false)}
@@ -466,7 +467,7 @@ export default function ConversationNavigator({
               type="button"
               size="icon"
               variant="ghost"
-              className="h-9 w-9"
+              className="h-9 w-6"
               title="Collapse toolbar"
               aria-label="Collapse toolbar"
               onClick={() => onUtilityRowCollapsedChange?.(true)}
