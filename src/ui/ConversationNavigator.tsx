@@ -297,6 +297,7 @@ export default function ConversationNavigator({
   const [editDialog, setEditDialog] = useState<EditDialogState | null>(null);
   const [themeMenuOpen, setThemeMenuOpen] = useState(false);
   const flowWrapperRef = useRef<HTMLDivElement>(null);
+  const flowInstanceRef = useRef<ReactFlowInstance<MessageFlowNode, Edge> | null>(null);
   const themeMenuRef = useRef<HTMLDivElement>(null);
   const savedViewportRef = useRef<Viewport | null>(null);
   const fitInitialViewRef = useRef(false);
@@ -316,6 +317,7 @@ export default function ConversationNavigator({
   }
 
   const handleFlowInit = useCallback((instance: ReactFlowInstance<MessageFlowNode, Edge>) => {
+    flowInstanceRef.current = instance;
     if (savedViewportRef.current) {
       void instance.setViewport(savedViewportRef.current);
       return;
@@ -425,6 +427,25 @@ export default function ConversationNavigator({
     });
   }, [api, editDialog]);
 
+  const handleGoToSelected = useCallback(() => {
+    if (!selectedNodeId) return;
+
+    const selectedFlowNode = flowElements.nodes.find((node) => node.id === selectedNodeId);
+    void runAction('navigate', async () => {
+      const instance = flowInstanceRef.current;
+      if (instance && selectedFlowNode) {
+        const viewport = instance.getViewport();
+        await instance.setCenter(
+          selectedFlowNode.position.x + NODE_WIDTH / 2,
+          selectedFlowNode.position.y + NODE_HEIGHT / 2,
+          { zoom: viewport.zoom, duration: 250 },
+        );
+      }
+
+      await api.navigateToNode(selectedNodeId);
+    }, false);
+  }, [api, flowElements.nodes, selectedNodeId]);
+
   const body = (
     <div className="relative flex h-full min-h-0 flex-col bg-background text-foreground">
       {error ? (
@@ -531,6 +552,18 @@ export default function ConversationNavigator({
               aria-label="Refresh tree"
             >
               {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+            </Button>
+            <Button
+              type="button"
+              size="icon"
+              variant="ghost"
+              className="h-9 w-9"
+              onClick={handleGoToSelected}
+              disabled={!selectedNodeId || busyAction === 'navigate'}
+              title="Select and scroll to selected message"
+              aria-label="Select and scroll to selected message"
+            >
+              <LocateFixed className="h-4 w-4" />
             </Button>
             <Button
               type="button"
