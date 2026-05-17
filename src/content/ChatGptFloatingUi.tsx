@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
-import { FolderTree, Maximize2, Minimize2, Minus } from 'lucide-react';
+import { FolderTree, Maximize2, MessagesSquare, Minimize2, Minus } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -496,7 +496,10 @@ export default function ChatGptFloatingUi() {
             onPointerUp={handleDragPointerUp}
             onPointerCancel={handleDragPointerUp}
           >
-            <div className="min-w-0 flex-1 truncate text-sm font-medium">{conversationTitle}</div>
+            <MessagesSquare className="h-5 w-5 shrink-0" />
+            <div className="min-w-0 flex-1 truncate text-sm font-medium">
+              {conversationTitle}
+            </div>
             <Button
               type="button"
               size="icon"
