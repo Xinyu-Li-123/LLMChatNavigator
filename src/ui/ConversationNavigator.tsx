@@ -16,13 +16,14 @@ import {
   type ReactFlowInstance,
   type Viewport,
 } from '@xyflow/react';
-import { Edit3, Loader2, LocateFixed, RefreshCw, X } from 'lucide-react';
+import { Edit3, Loader2, LocateFixed, Moon, RefreshCw, Sun, X } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import { visibleText } from '@/src/shared/chatgptTree';
+import type { NavigatorTheme } from '@/src/shared/navigatorUiConfig';
 import type { ConversationNode, NavigatorSnapshot } from '@/src/shared/types';
 
 export type NavigatorApi = {
@@ -35,6 +36,8 @@ export type NavigatorApi = {
 type ConversationNavigatorProps = {
   api: NavigatorApi;
   compact?: boolean;
+  theme?: NavigatorTheme;
+  onToggleTheme?: () => void;
 };
 
 type ContextMenuState = {
@@ -204,7 +207,7 @@ function layoutDisplayTree(
         target: childId,
         type: 'smoothstep',
         markerEnd: { type: MarkerType.ArrowClosed, width: 14, height: 14 },
-        style: { strokeWidth: 1.5 },
+        style: { stroke: 'var(--border)', strokeWidth: 1.5 },
       });
 
       place(childId, childLeft, depth + 1);
@@ -261,7 +264,12 @@ const nodeTypes = {
   message: MessageNode,
 } satisfies NodeTypes;
 
-export default function ConversationNavigator({ api, compact = false }: ConversationNavigatorProps) {
+export default function ConversationNavigator({
+  api,
+  compact = false,
+  theme = 'light',
+  onToggleTheme,
+}: ConversationNavigatorProps) {
   const [snapshot, setSnapshot] = useState<NavigatorSnapshot | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [query, setQuery] = useState('');
@@ -368,11 +376,22 @@ export default function ConversationNavigator({ api, compact = false }: Conversa
   }, [api, editDialog]);
 
   const body = (
-    <div className="relative flex h-full min-h-0 flex-col bg-white text-foreground" style={{ backgroundColor: '#fff' }}>
+    <div className="relative flex h-full min-h-0 flex-col bg-background text-foreground">
       <div className="flex min-h-10 items-center gap-2 px-3 py-1.5">
         <div className="min-w-0 flex-1 truncate text-sm font-medium">
           {snapshot?.tree.title ?? 'Current conversation'}
         </div>
+        {onToggleTheme ? (
+          <Button
+            size="icon"
+            variant="ghost"
+            onClick={onToggleTheme}
+            title={theme === 'dark' ? 'Use light mode' : 'Use dark mode'}
+            aria-label={theme === 'dark' ? 'Use light mode' : 'Use dark mode'}
+          >
+            {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+          </Button>
+        ) : null}
         <Button
           size="icon"
           variant="ghost"
@@ -410,14 +429,14 @@ export default function ConversationNavigator({ api, compact = false }: Conversa
         </div>
       ) : null}
 
-      <div ref={flowWrapperRef} className="relative min-h-0 flex-1 overflow-hidden bg-white" style={{ backgroundColor: '#fff' }}>
+      <div ref={flowWrapperRef} className="relative min-h-0 flex-1 overflow-hidden bg-background">
         {flowElements.nodes.length > 0 ? (
           <ReactFlow
-            className="bg-white"
+            className="bg-background"
             nodes={flowElements.nodes}
             edges={flowElements.edges}
             nodeTypes={nodeTypes}
-            style={{ backgroundColor: '#fff' }}
+            style={{ backgroundColor: 'var(--background)' }}
             nodesDraggable={false}
             nodesConnectable={false}
             elementsSelectable
@@ -432,7 +451,7 @@ export default function ConversationNavigator({ api, compact = false }: Conversa
             onNodeContextMenu={handleNodeContextMenu}
             onPaneClick={() => setContextMenu(null)}
           >
-            <Background gap={24} size={1} />
+            <Background gap={24} size={1} color="var(--border)" />
             <Controls showInteractive={false} position="bottom-right" />
           </ReactFlow>
         ) : (

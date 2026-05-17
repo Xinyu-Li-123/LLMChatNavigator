@@ -19,9 +19,20 @@ export type ProviderUiConfig = {
   pane: FloatingPaneConfig;
 };
 
+export type NavigatorTheme = 'light' | 'dark';
+
+export type ExtensionUiConfig = {
+  theme: NavigatorTheme;
+};
+
 export type NavigatorUiConfig = Partial<Record<ChatProvider, ProviderUiConfig>>;
 
 export const NAVIGATOR_UI_CONFIG_STORAGE_KEY = 'llm-chat-navigator:ui-config:v1';
+export const EXTENSION_UI_CONFIG_STORAGE_KEY = 'llm-chat-navigator:extension-ui-config:v1';
+
+const DEFAULT_EXTENSION_CONFIG: ExtensionUiConfig = {
+  theme: 'light',
+};
 
 const DEFAULT_PROVIDER_CONFIG: ProviderUiConfig = {
   floatingButtonPosition: null,
@@ -43,8 +54,26 @@ function isPaneSide(value: unknown): value is PaneSide {
   return value === 'auto' || value === 'left' || value === 'right';
 }
 
+function isNavigatorTheme(value: unknown): value is NavigatorTheme {
+  return value === 'light' || value === 'dark';
+}
+
 function numberOrDefault(value: unknown, fallback: number): number {
   return typeof value === 'number' && Number.isFinite(value) ? value : fallback;
+}
+
+export function defaultExtensionUiConfig(): ExtensionUiConfig {
+  return { ...DEFAULT_EXTENSION_CONFIG };
+}
+
+export function normalizeExtensionUiConfig(value: unknown): ExtensionUiConfig {
+  const defaults = defaultExtensionUiConfig();
+  if (!value || typeof value !== 'object') return defaults;
+
+  const candidate = value as Partial<ExtensionUiConfig>;
+  return {
+    theme: isNavigatorTheme(candidate.theme) ? candidate.theme : defaults.theme,
+  };
 }
 
 export function defaultProviderUiConfig(): ProviderUiConfig {
@@ -76,6 +105,17 @@ export async function loadNavigatorUiConfig(): Promise<NavigatorUiConfig> {
   const result = await browser.storage.local.get(NAVIGATOR_UI_CONFIG_STORAGE_KEY);
   const stored = result[NAVIGATOR_UI_CONFIG_STORAGE_KEY];
   return stored && typeof stored === 'object' ? stored as NavigatorUiConfig : {};
+}
+
+export async function loadExtensionUiConfig(): Promise<ExtensionUiConfig> {
+  const result = await browser.storage.local.get(EXTENSION_UI_CONFIG_STORAGE_KEY);
+  return normalizeExtensionUiConfig(result[EXTENSION_UI_CONFIG_STORAGE_KEY]);
+}
+
+export async function saveExtensionUiConfig(extensionConfig: ExtensionUiConfig): Promise<void> {
+  await browser.storage.local.set({
+    [EXTENSION_UI_CONFIG_STORAGE_KEY]: normalizeExtensionUiConfig(extensionConfig),
+  });
 }
 
 export async function loadProviderUiConfig(provider: ChatProvider): Promise<ProviderUiConfig> {

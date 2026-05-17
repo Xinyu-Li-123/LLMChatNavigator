@@ -5,10 +5,14 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import {
+  defaultExtensionUiConfig,
   defaultProviderUiConfig,
+  loadExtensionUiConfig,
   loadProviderUiConfig,
+  saveExtensionUiConfig,
   saveProviderUiConfig,
   type FloatingPaneConfig,
+  type NavigatorTheme,
   type PaneSide,
   type Position,
   type ProviderUiConfig,
@@ -189,10 +193,12 @@ async function loadLegacyButtonPosition(): Promise<Position | null> {
 }
 
 export default function ChatGptFloatingUi() {
+  const defaultExtensionConfig = useMemo(() => defaultExtensionUiConfig(), []);
   const defaultConfig = useMemo(() => defaultProviderUiConfig(), []);
   const defaultButtonPosition = useMemo(() => getDefaultPosition(), []);
   const [open, setOpen] = useState(false);
   const [hasOpened, setHasOpened] = useState(false);
+  const [theme, setTheme] = useState<NavigatorTheme>(defaultExtensionConfig.theme);
   const [position, setPosition] = useState<Position>(() => defaultButtonPosition);
   const [paneRect, setPaneRect] = useState<PaneRect>(() => paneRectFromConfig(defaultConfig.pane));
   const [paneSide, setPaneSide] = useState<PaneSide>(defaultConfig.pane.side);
@@ -236,12 +242,14 @@ export default function ChatGptFloatingUi() {
 
   useEffect(() => {
     async function loadSavedConfig() {
-      const [savedConfig, legacyPosition] = await Promise.all([
+      const [savedExtensionConfig, savedConfig, legacyPosition] = await Promise.all([
+        loadExtensionUiConfig(),
         loadProviderUiConfig(PROVIDER),
         loadLegacyButtonPosition(),
       ]);
       const nextPosition = clampPosition(savedConfig.floatingButtonPosition ?? legacyPosition ?? getDefaultPosition());
       const nextPaneRect = paneRectFromConfig(savedConfig.pane);
+      setTheme(savedExtensionConfig.theme);
       setPosition(nextPosition);
       setPaneSide(savedConfig.pane.side);
       setPaneRect(nextPaneRect);
@@ -286,6 +294,14 @@ export default function ChatGptFloatingUi() {
         panePositionSavedRef.current,
       ),
     );
+  }
+
+  function handleThemeToggle() {
+    setTheme((current) => {
+      const next: NavigatorTheme = current === 'dark' ? 'light' : 'dark';
+      void saveExtensionUiConfig({ theme: next });
+      return next;
+    });
   }
 
   function handleDragPointerDown(event: ReactPointerEvent<HTMLElement>, mode: 'button' | 'pane') {
@@ -421,15 +437,15 @@ export default function ChatGptFloatingUi() {
   }
 
   return (
-    <div className="fixed inset-0 z-[2147483647] pointer-events-none">
+    <div className={cn('fixed inset-0 z-[2147483647] pointer-events-none', theme === 'dark' && 'dark')}>
       {!open ? (
         <Button
           type="button"
           size="icon"
           aria-label="Open LLM Chat Navigator"
           title="Open LLM Chat Navigator"
-          className="pointer-events-auto fixed h-12 w-12 rounded-none bg-white text-foreground shadow-xl select-none cursor-grab active:cursor-grabbing hover:bg-white"
-          style={{ left: position.x, top: position.y, backgroundColor: '#fff' }}
+          className="pointer-events-auto fixed h-12 w-12 rounded-none bg-background text-foreground shadow-xl select-none cursor-grab active:cursor-grabbing hover:bg-background"
+          style={{ left: position.x, top: position.y }}
           onPointerDown={(event) => handleDragPointerDown(event, 'button')}
           onPointerMove={handleDragPointerMove}
           onPointerUp={handleDragPointerUp}
@@ -441,19 +457,17 @@ export default function ChatGptFloatingUi() {
 
       {hasOpened ? (
         <Card
-          className="pointer-events-auto fixed flex flex-col overflow-hidden bg-white text-foreground shadow-2xl"
+          className="pointer-events-auto fixed flex flex-col overflow-hidden bg-background text-foreground shadow-2xl"
           style={{
             left: paneRect.left,
             top: paneRect.top,
             width: paneRect.width,
             height: paneRect.height,
-            backgroundColor: '#fff',
             display: open ? undefined : 'none',
           }}
         >
           <div
-            className="flex h-11 shrink-0 cursor-grab select-none items-center gap-2 border-b bg-white px-3 active:cursor-grabbing"
-            style={{ backgroundColor: '#fff' }}
+            className="flex h-11 shrink-0 cursor-grab select-none items-center gap-2 border-b bg-background px-3 active:cursor-grabbing"
             onPointerDown={(event) => handleDragPointerDown(event, 'pane')}
             onPointerMove={handleDragPointerMove}
             onPointerUp={handleDragPointerUp}
@@ -487,8 +501,8 @@ export default function ChatGptFloatingUi() {
             </Button>
           </div>
 
-          <div className="min-h-0 flex-1 overflow-hidden rounded-xl bg-white" style={{ backgroundColor: '#fff' }}>
-            <ConversationNavigator api={contentApi} compact />
+          <div className="min-h-0 flex-1 overflow-hidden rounded-xl bg-background">
+            <ConversationNavigator api={contentApi} compact theme={theme} onToggleTheme={handleThemeToggle} />
           </div>
 
           {RESIZE_HANDLES.map((handle) => (
