@@ -434,6 +434,8 @@ export default function ConversationNavigator({
               className="h-9 w-9"
               title="Search conversations"
               aria-label="Search conversations"
+              {/* TODO: Implement search within a convo */}
+              disabled
               onClick={() => { }}
             >
               <Search className="h-5 w-5" />
