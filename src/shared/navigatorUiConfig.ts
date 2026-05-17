@@ -19,7 +19,7 @@ export type ProviderUiConfig = {
   pane: FloatingPaneConfig;
 };
 
-export type NavigatorTheme = 'light' | 'dark';
+export type NavigatorTheme = 'auto' | 'light' | 'dark';
 
 export type ExtensionUiConfig = {
   theme: NavigatorTheme;
@@ -32,7 +32,7 @@ export const NAVIGATOR_UI_CONFIG_STORAGE_KEY = 'llm-chat-navigator:ui-config:v1'
 export const EXTENSION_UI_CONFIG_STORAGE_KEY = 'llm-chat-navigator:extension-ui-config:v1';
 
 const DEFAULT_EXTENSION_CONFIG: ExtensionUiConfig = {
-  theme: 'light',
+  theme: 'auto',
   utilityRowCollapsed: false,
 };
 
@@ -57,7 +57,7 @@ function isPaneSide(value: unknown): value is PaneSide {
 }
 
 function isNavigatorTheme(value: unknown): value is NavigatorTheme {
-  return value === 'light' || value === 'dark';
+  return value === 'auto' || value === 'light' || value === 'dark';
 }
 
 function numberOrDefault(value: unknown, fallback: number): number {

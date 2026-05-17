@@ -16,7 +16,7 @@ import {
   type ReactFlowInstance,
   type Viewport,
 } from '@xyflow/react';
-import { ChevronLeft, ChevronRight, Edit3, Loader2, LocateFixed, Moon, RefreshCw, Search, Sun, X } from 'lucide-react';
+import { Check, ChevronLeft, ChevronRight, Edit3, Loader2, LocateFixed, Moon, RefreshCw, Search, Sun, SunMoon, X } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -37,7 +37,7 @@ type ConversationNavigatorProps = {
   api: NavigatorApi;
   compact?: boolean;
   theme?: NavigatorTheme;
-  onToggleTheme?: () => void;
+  onThemeChange?: (theme: NavigatorTheme) => void;
   utilityRowCollapsed?: boolean;
   onUtilityRowCollapsedChange?: (collapsed: boolean) => void;
   onTitleChange?: (title: string) => void;
@@ -281,8 +281,8 @@ const flowStyle: ReactFlowCssProperties = {
 export default function ConversationNavigator({
   api,
   compact = false,
-  theme = 'light',
-  onToggleTheme,
+  theme = 'auto',
+  onThemeChange,
   utilityRowCollapsed = false,
   onUtilityRowCollapsedChange,
   onTitleChange,
@@ -295,7 +295,9 @@ export default function ConversationNavigator({
   const [error, setError] = useState<string | null>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
   const [editDialog, setEditDialog] = useState<EditDialogState | null>(null);
+  const [themeMenuOpen, setThemeMenuOpen] = useState(false);
   const flowWrapperRef = useRef<HTMLDivElement>(null);
+  const themeMenuRef = useRef<HTMLDivElement>(null);
   const savedViewportRef = useRef<Viewport | null>(null);
   const fitInitialViewRef = useRef(false);
 
@@ -339,6 +341,26 @@ export default function ConversationNavigator({
     onTitleChange?.(snapshot?.tree.title ?? 'Current conversation');
   }, [onTitleChange, snapshot]);
 
+  useEffect(() => {
+    if (!themeMenuOpen) return;
+
+    function handleDocumentClick(event: MouseEvent) {
+      if (themeMenuRef.current?.contains(event.target as globalThis.Node)) return;
+      setThemeMenuOpen(false);
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === 'Escape') setThemeMenuOpen(false);
+    }
+
+    document.addEventListener('click', handleDocumentClick);
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('click', handleDocumentClick);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [themeMenuOpen]);
+
   const displayTree = useMemo(() => buildDisplayTree(snapshot, query), [query, snapshot]);
 
   const flowElements = useMemo(
@@ -349,6 +371,13 @@ export default function ConversationNavigator({
   const selectedNode = selectedNodeId && snapshot ? snapshot.tree.nodes[selectedNodeId] : null;
   const menuNode = contextMenu && snapshot ? snapshot.tree.nodes[contextMenu.nodeId] : null;
   const editNode = editDialog && snapshot ? snapshot.tree.nodes[editDialog.nodeId] : null;
+
+  const themeOptionMeta: Record<NavigatorTheme, { label: string; title: string; icon: typeof Sun }> = {
+    auto: { label: 'Auto', title: 'Use system theme', icon: SunMoon },
+    light: { label: 'Light', title: 'Use light theme', icon: Sun },
+    dark: { label: 'Dark', title: 'Use dark theme', icon: Moon },
+  };
+  const ThemeIcon = themeOptionMeta[theme].icon;
 
   async function runAction(label: string, action: () => Promise<void>, refreshAfter = true) {
     setBusyAction(label);
@@ -434,24 +463,62 @@ export default function ConversationNavigator({
               className="h-9 w-9"
               title="Search conversations"
               aria-label="Search conversations"
-              {/* TODO: Implement search within a convo */}
               disabled
               onClick={() => { }}
             >
-              <Search className="h-5 w-5" />
+              <Search className="h-4 w-4" />
             </Button>
-            {onToggleTheme ? (
-              <Button
-                type="button"
-                size="icon"
-                variant="ghost"
-                className="h-9 w-9"
-                onClick={onToggleTheme}
-                title={theme === 'dark' ? 'Use light mode' : 'Use dark mode'}
-                aria-label={theme === 'dark' ? 'Use light mode' : 'Use dark mode'}
-              >
-                {theme === 'dark' ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
-              </Button>
+            {onThemeChange ? (
+              <div ref={themeMenuRef} className="relative">
+                <Button
+                  type="button"
+                  size="icon"
+                  variant="ghost"
+                  className="h-9 w-9"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    setThemeMenuOpen((current) => !current);
+                  }}
+                  title={themeOptionMeta[theme].title}
+                  aria-label={themeOptionMeta[theme].title}
+                  aria-haspopup="menu"
+                  aria-expanded={themeMenuOpen}
+                >
+                  <ThemeIcon className="h-5 w-5" />
+                </Button>
+                {themeMenuOpen ? (
+                  <div
+                    className="absolute right-0 top-full mt-2 min-w-36 overflow-hidden rounded-md border bg-popover text-sm text-popover-foreground shadow-lg"
+                    role="menu"
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    {(Object.entries(themeOptionMeta) as [NavigatorTheme, typeof themeOptionMeta[NavigatorTheme]][]).map(([value, option]) => {
+                      const OptionIcon = option.icon;
+                      return (
+                        <button
+                          key={value}
+                          type="button"
+                          className={cn(
+                            'flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-accent',
+                            theme === value && 'bg-accent/60',
+                          )}
+                          role="menuitemradio"
+                          aria-checked={theme === value}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            onThemeChange(value);
+                            setThemeMenuOpen(false);
+                          }}
+                        >
+                          <OptionIcon className="h-4 w-4" />
+                          <span className="flex-1">{option.label}</span>
+                          {theme === value ? <Check className="h-4 w-4" /> : null}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : null}
+              </div>
             ) : null}
             <Button
               type="button"
@@ -463,7 +530,7 @@ export default function ConversationNavigator({
               title="Refresh tree"
               aria-label="Refresh tree"
             >
-              {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <RefreshCw className="h-5 w-5" />}
+              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
             </Button>
             <Button
               type="button"

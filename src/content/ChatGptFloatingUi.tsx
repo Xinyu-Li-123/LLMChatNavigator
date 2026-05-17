@@ -75,6 +75,10 @@ function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
 }
 
+function systemPrefersDark(): boolean {
+  return window.matchMedia('(prefers-color-scheme: dark)').matches;
+}
+
 function maxPaneWidth() {
   return Math.max(MIN_PANE_WIDTH, window.innerWidth - MARGIN * 2);
 }
@@ -199,6 +203,7 @@ export default function ChatGptFloatingUi() {
   const [open, setOpen] = useState(false);
   const [hasOpened, setHasOpened] = useState(false);
   const [theme, setTheme] = useState<NavigatorTheme>(defaultExtensionConfig.theme);
+  const [prefersDark, setPrefersDark] = useState(() => systemPrefersDark());
   const [conversationTitle, setConversationTitle] = useState('Current conversation');
   const [utilityRowCollapsed, setUtilityRowCollapsed] = useState(defaultExtensionConfig.utilityRowCollapsed);
   const [position, setPosition] = useState<Position>(() => defaultButtonPosition);
@@ -241,6 +246,17 @@ export default function ChatGptFloatingUi() {
   useEffect(() => {
     latestStateRef.current = { position, paneRect, paneSide };
   }, [paneRect, paneSide, position]);
+
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const handleChange = (event: MediaQueryListEvent) => {
+      setPrefersDark(event.matches);
+    };
+
+    setPrefersDark(mediaQuery.matches);
+    mediaQuery.addEventListener('change', handleChange);
+    return () => mediaQuery.removeEventListener('change', handleChange);
+  }, []);
 
   useEffect(() => {
     async function loadSavedConfig() {
@@ -299,12 +315,9 @@ export default function ChatGptFloatingUi() {
     );
   }
 
-  function handleThemeToggle() {
-    setTheme((current) => {
-      const next: NavigatorTheme = current === 'dark' ? 'light' : 'dark';
-      void saveExtensionUiConfig({ theme: next, utilityRowCollapsed });
-      return next;
-    });
+  function handleThemeChange(next: NavigatorTheme) {
+    setTheme(next);
+    void saveExtensionUiConfig({ theme: next, utilityRowCollapsed });
   }
 
   function handleUtilityRowCollapsedChange(collapsed: boolean) {
@@ -444,8 +457,10 @@ export default function ChatGptFloatingUi() {
     event.stopPropagation();
   }
 
+  const resolvedDarkMode = theme === 'dark' || (theme === 'auto' && prefersDark);
+
   return (
-    <div className={cn('fixed inset-0 z-[2147483647] pointer-events-none', theme === 'dark' && 'dark')}>
+    <div className={cn('fixed inset-0 z-[2147483647] pointer-events-none', resolvedDarkMode && 'dark')}>
       {!open ? (
         <Button
           type="button"
@@ -513,7 +528,7 @@ export default function ChatGptFloatingUi() {
               api={contentApi}
               compact
               theme={theme}
-              onToggleTheme={handleThemeToggle}
+              onThemeChange={handleThemeChange}
               utilityRowCollapsed={utilityRowCollapsed}
               onUtilityRowCollapsedChange={handleUtilityRowCollapsedChange}
               onTitleChange={setConversationTitle}
