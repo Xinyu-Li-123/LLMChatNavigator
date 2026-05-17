@@ -14,7 +14,7 @@ A WXT + React + TypeScript browser extension that adds a ChatGPT conversation-tr
 
 ## Demo
 
-Chat LLM Navigator
+Tree view of a conversation with ChatGPT
 
 ![](./doc/res/demo-expanded.png)
 
