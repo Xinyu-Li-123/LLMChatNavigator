@@ -2,7 +2,7 @@ import type { ApiResult, ChatGptBackgroundRequest, ChatGptConversationResponse }
 
 type StoredHeader = { name: string; value?: string };
 
-const CHATGPT_API_PATTERN = 'https://chatgpt.com/backend-api/*';
+const CHATGPT_AUTH_REQUEST_PATTERN = 'https://chatgpt.com/backend-api/conversation/*';
 const STORAGE_HEADERS_KEY = 'llmNavChatGptRequestHeaders';
 
 function ok<T>(data: T): ApiResult<T> {
@@ -14,11 +14,9 @@ function fail(error: unknown): ApiResult<never> {
 }
 
 function getHeaderStorage() {
-  const storage = browser.storage as unknown as {
-    session?: typeof browser.storage.local;
-    local: typeof browser.storage.local;
-  };
-  return storage.session ?? storage.local;
+  return 'session' in browser.storage && browser.storage.session
+    ? browser.storage.session
+    : browser.storage.local;
 }
 
 async function saveHeaders(headers: StoredHeader[]): Promise<void> {
@@ -31,10 +29,15 @@ async function loadHeaders(): Promise<StoredHeader[] | null> {
 }
 
 function hasAuthorization(headers: StoredHeader[] | undefined): headers is StoredHeader[] {
+  // Some TypeScript magic to let typechecker know headers is StoredHeader[] if 
+  // this function returns true
   return Boolean(headers?.some((header) => header.name.toLowerCase() === 'authorization'));
 }
 
-function installHeaderCapture(): void {
+/**
+ * Install a listener that capture the request header that contains the authorization for backend api. Later, we can reuse this header to make request to backend.
+ */
+function installAuthHeaderCapture(): void {
   const listener = (details: { requestHeaders?: StoredHeader[] }) => {
     const headers = details.requestHeaders;
     if (hasAuthorization(headers)) {
@@ -43,17 +46,19 @@ function installHeaderCapture(): void {
   };
 
   try {
-    browser.webRequest.onBeforeSendHeaders.addListener(
+    // NOTE: We don't use onBeforeSendHeaders because Chrome doesn't provide authorization header in this event
+    // See https://developer.chrome.com/docs/extensions/reference/api/webRequest#life_cycle_footnote
+    browser.webRequest.onSendHeaders.addListener(
       listener,
-      { urls: [CHATGPT_API_PATTERN] },
-      ['requestHeaders', 'extraHeaders'] as unknown as string[],
+      { urls: [CHATGPT_AUTH_REQUEST_PATTERN] },
+      ['requestHeaders', 'extraHeaders'],
     );
   } catch (error) {
     try {
-      browser.webRequest.onBeforeSendHeaders.addListener(
+      browser.webRequest.onSendHeaders.addListener(
         listener,
-        { urls: [CHATGPT_API_PATTERN] },
-        ['requestHeaders'] as unknown as string[],
+        { urls: [CHATGPT_AUTH_REQUEST_PATTERN] },
+        ['requestHeaders'],
       );
     } catch (fallbackError) {
       console.warn('LLM Chat Navigator: could not install ChatGPT header capture listener.', error, fallbackError);
@@ -94,7 +99,7 @@ async function fetchChatGptConversation(conversationId: string): Promise<ChatGpt
 }
 
 export default defineBackground(() => {
-  installHeaderCapture();
+  installAuthHeaderCapture();
 
   browser.runtime.onMessage.addListener((message: ChatGptBackgroundRequest) => {
     if (!message || typeof message !== 'object' || !('type' in message)) return undefined;
