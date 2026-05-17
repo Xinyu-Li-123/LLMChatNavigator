@@ -1,6 +1,6 @@
 import '@xyflow/react/dist/style.css';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import {
   Background,
   Controls,
@@ -264,6 +264,17 @@ const nodeTypes = {
   message: MessageNode,
 } satisfies NodeTypes;
 
+type ReactFlowCssProperties = CSSProperties & Record<`--${string}`, string>;
+
+const flowStyle: ReactFlowCssProperties = {
+  backgroundColor: 'var(--background)',
+  '--xy-controls-button-background-color': 'var(--card)',
+  '--xy-controls-button-background-color-hover': 'var(--accent)',
+  '--xy-controls-button-border-color': 'var(--border)',
+  '--xy-controls-button-color': 'var(--foreground)',
+  '--xy-controls-button-color-hover': 'var(--foreground)',
+};
+
 export default function ConversationNavigator({
   api,
   compact = false,
@@ -436,7 +447,7 @@ export default function ConversationNavigator({
             nodes={flowElements.nodes}
             edges={flowElements.edges}
             nodeTypes={nodeTypes}
-            style={{ backgroundColor: 'var(--background)' }}
+            style={flowStyle}
             nodesDraggable={false}
             nodesConnectable={false}
             elementsSelectable
@@ -450,6 +461,7 @@ export default function ConversationNavigator({
             }}
             onNodeContextMenu={handleNodeContextMenu}
             onPaneClick={() => setContextMenu(null)}
+            proOptions={{ hideAttribution: true }}
           >
             <Background gap={24} size={1} color="var(--border)" />
             <Controls showInteractive={false} position="bottom-right" />

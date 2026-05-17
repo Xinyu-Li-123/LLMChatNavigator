@@ -444,7 +444,7 @@ export default function ChatGptFloatingUi() {
           size="icon"
           aria-label="Open LLM Chat Navigator"
           title="Open LLM Chat Navigator"
-          className="pointer-events-auto fixed h-12 w-12 rounded-none bg-background text-foreground shadow-xl select-none cursor-grab active:cursor-grabbing hover:bg-background"
+          className="pointer-events-auto fixed h-12 w-12 rounded-none bg-background text-foreground shadow-xl select-none cursor-grab active:cursor-grabbing hover:bg-background rounded-md"
           style={{ left: position.x, top: position.y }}
           onPointerDown={(event) => handleDragPointerDown(event, 'button')}
           onPointerMove={handleDragPointerMove}
