@@ -10,6 +10,8 @@
 
 - [ ] Add a small view of full graph at top right of popup window
 
+- [ ] Define popup button and window position using relative unit, so it is robust against page zoom in / out
+
 - [x] Can we hide the popup button after clicking it and expanding the popup pane?
 
 - [x] We should load the tree once, and avoid re-parsing everything when we expand-hide-expand the window.
