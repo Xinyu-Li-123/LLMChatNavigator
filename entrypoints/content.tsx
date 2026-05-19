@@ -1,3 +1,5 @@
+// TODO: Refactor this whole content script into provide-agnostic and provider-specific parts
+
 import '@/assets/tailwind.css';
 
 import React from 'react';
@@ -24,6 +26,7 @@ export default defineContentScript({
   async main(ctx) {
     installNativeHoverWarmup();
 
+    // TODO: This vibe-coded shit is not used anywhere in the extension
     browser.runtime.onMessage.addListener((message: ChatGptContentRequest) => {
       if (!message || typeof message !== 'object' || !('type' in message)) return undefined;
 
@@ -55,6 +58,9 @@ export default defineContentScript({
         container.append(rootElement);
 
         const root = ReactDOM.createRoot(rootElement);
+        // TODO: Here, we should instantiate a platform-agnostic <LLMChatNavigatorUI />, 
+        // and pass in our platform-specific adaptor as a prop value of type ConvoAdaptor (platform-agnostic)
+        // TODO: This also means we can use a dummy adaptor impl for testing
         root.render(
           <React.StrictMode>
             <ChatGptFloatingUi />

@@ -112,7 +112,11 @@ export default defineBackground(() => {
   browser.runtime.onMessage.addListener((message: ChatGptBackgroundRequest) => {
     if (!message || typeof message !== 'object' || !('type' in message)) return undefined;
 
-    // TODO: Make message a union over all allowed message types
+    // TODO: Define a generic "auth fetch msg" message type, so content script can initiate any fetch request
+    // with platform-specific authorization
+    // To achieve this, we can 
+    // - define an interface for auth fetch support, e.g. how to obtain latest auth header, and how to pack the header to a fetch request
+    // - implement this support for each platform under some folder like src/<platform>/auth/
     if (message.type === 'LLM_NAV_FETCH_CHATGPT_CONVERSATION') {
       return fetchChatGptConversation(message.conversationId).then(ok<ChatGptConversationResponse>).catch(fail);
     }

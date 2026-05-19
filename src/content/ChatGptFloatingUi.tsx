@@ -199,6 +199,7 @@ async function loadLegacyButtonPosition(): Promise<Position | null> {
 export default function ChatGptFloatingUi() {
   const defaultExtensionConfig = useMemo(() => defaultExtensionUiConfig(), []);
   const defaultConfig = useMemo(() => defaultProviderUiConfig(), []);
+  // TODO: position is part of the provider ui config, since we may want different window size and positiion on different websites
   const defaultButtonPosition = useMemo(() => getDefaultPosition(), []);
   const [open, setOpen] = useState(false);
   const [hasOpened, setHasOpened] = useState(false);
@@ -301,6 +302,7 @@ export default function ChatGptFloatingUi() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
+  // TODO: Can we extract shape of config, and helper for config handling, to a separate file?
   function persistCurrentState(savePanePosition = false) {
     if (savePanePosition) panePositionSavedRef.current = true;
     const latest = latestStateRef.current;
@@ -432,6 +434,8 @@ export default function ChatGptFloatingUi() {
 
   function handleCollapse() {
     setOpen(false);
+    // TODO: should we do this: current state should be persisted 
+    // not just on collapse, but on each change, e.g. on drag window corner done
     persistCurrentState();
   }
 

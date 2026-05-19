@@ -29,6 +29,8 @@ import type { ConversationNode, NavigatorSnapshot } from '@/src/shared/types';
 export type NavigatorApi = {
   fetchSnapshot(options?: { force?: boolean }): Promise<NavigatorSnapshot>;
   navigateToNode(nodeId: string): Promise<void>;
+  // TODO: This is unnecessary. We don't need to reflect the user input in webapge msg edit box in real-time.
+  // Instead, we just need to submit the user input in the webpage.
   editMessage(nodeId: string, text: string): Promise<void>;
   submitReply(parentNodeId: string, text: string): Promise<void>;
 };

@@ -7,6 +7,7 @@ import type {
   MessageRole,
 } from './types';
 
+// TODO: Create a centralized conversation state, and expose a method for get convo id
 export function getConversationIdFromUrl(urlText = location.href): string | null {
   const url = new URL(urlText);
   if (url.origin !== 'https://chatgpt.com' && url.origin !== 'https://chat.openai.com') {

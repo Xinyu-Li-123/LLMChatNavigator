@@ -12,6 +12,8 @@
 
 - [ ] Define popup button and window position using relative unit, so it is robust against page zoom in / out
 
+- [ ] Add a popup window for editing message in our nav ui. We will add a button to invoke this popup in the in-place edit msg window in nav ui.
+
 - [x] Can we hide the popup button after clicking it and expanding the popup pane?
 
 - [x] We should load the tree once, and avoid re-parsing everything when we expand-hide-expand the window.
