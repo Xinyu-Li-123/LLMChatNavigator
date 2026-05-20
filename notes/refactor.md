@@ -168,6 +168,11 @@ export interface ConvoController {
   navigateToNode(targetNodeId: string): Promise<void>;
 
   /**
+   * Edit a node's message and submit to backend.
+   */
+  submitReply(parentNodeId: string, text: string): Promise<void>;
+
+  /**
    * Register a listener that is triggered on snapshot update
    *
    * Note that a new snapshot will always be fetched on syncConv().
