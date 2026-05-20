@@ -2,7 +2,7 @@
 
 ## TODO List of Unsure Items
 
-- [ ] Who should own the authoritative tree repr of chat? Is it the convo adaptor or the page ui or some intermediate class (e.g. `Convo`) that lives in content script?
+- [ ] Who should own the authoritative tree repr of chat? Is it the convo controller or the page ui or some intermediate class (e.g. `Convo`) that lives in content script?
 
 ## Current Plan
 
@@ -18,7 +18,7 @@ type SupportedPlatform = "chatgpt" | "claude" | "deepseek";
 // We can also add headers that are modifiable by content script
 type FetchRequestPayload = object;
 
-// This can be converted to platform-specific response inside platform convo adaptor
+// This can be converted to platform-specific response inside platform convo controller
 type FetchResponse = object;
 
 type AuthApi = {
@@ -71,26 +71,65 @@ export default defineBackground(() => {
 });
 ```
 
-### Convo Adaptor in Content Script
+### Convo Controller in Content Script
 
-We will define a platform-agnostic interface `ConvoAdaptor` (Conversation Adaptor), which provides methods to
+First, we can have some abstractions
 
-- fetch convo history from backend, parse it into platform-agnostic tree repr and return
+```typescript
+export type ConvoMetadata = {
+  convoId: string;
+  convoTitle: string;
+  convoUrl: string;
+};
+
+export interface ConvoSnapshot {
+  readonly convoMetadata: ConvoMetadata;
+  readonly curNodeId: string;
+  readonly tree: ConvoTree;
+}
+```
+
+Based on how the nav ui page is refreshed, we have a simple and complex way to define the Convo Controller interface
+
+#### Simplest way: only support manual refreshing
+
+We will define a platform-agnostic interface `ConvoController` (Conversation Controller), which provides methods to
+
+- serve an authoritative tree repr of convo history
+
+- fetch convo history from backend to update the internal convo tree repr
 
 - interact with DOM tree to switch branch and navigate to message
 
 - interact with DOM tree to submit reply at a message
 
 ```typescript
-export interface ConvoAdaptor {
+export interface ConvoController {
   readonly platformName: SupportedPlatforms;
-  readonly curNodeId: string;
-  readonly convoId: string;
 
-  fetchConvoAndSync(): Promise<ConvoTree>;
+  /**
+   * Get latest known authoritative convo, or null if no snapshot is fetched yet
+   */
+  getSnapshot(): ConvoSnapshot | null;
+
+  /**
+   * Consult backend server to refresh convo to be latest
+   */
+  syncConvo(): Promise<void>;
+
+  /**
+   * Navigate to a node, scroll to it and switch branch if necessary
+   */
   navigateToNode(targetNodeId: string): Promise<void>;
+
+  // NOTE: Why no editMsg interface?
   // Message editing can happen inside the nav ui without touching the webpage.
-  // We only need to submit the edited message using submitReply.
+  // Thus, we don't need an api to edit message, and only need to
+  // submit the edited message to backend
+
+  /**
+   * Edit a node's message and submit to backend.
+   */
   submitReply(parentNodeId: string, text: string): Promise<void>;
 }
 ```
@@ -98,17 +137,83 @@ export interface ConvoAdaptor {
 We will implement this interface for each platform, e.g. For ChatGPT, we have
 
 ```typescript
-class ChatGPTConvoAdaptor implements ConvoAdaptor {
+class ChatGPTConvoController implements ConvoController {
   // ...
 }
 ```
 
-The `ChatGPTConvoAdaptor` will fetch convo from backend, parse the response, use it to update its internal repr of convo tree, and return the platform-agnostic convo tree repr.
+The `ChatGPTConvoController` will fetch convo from backend, parse the response, use it to update its internal repr of convo tree, and return the platform-agnostic convo tree repr.
 
-> TODO: This `ConvoAdaptor.fetchConvoAndSync()` is a bit overloaded. May need to reconsider what API the adaptor should provide.
+#### Complex but better way: Convo Controller provide a subscribe method from which nav ui can register event listener
+
+Nav UI will be updated immediately
+
+```typescript
+export interface ConvoController {
+  readonly platformName: SupportedPlatforms;
+
+  /**
+   * Get latest known authoritative convo, or null if no snapshot is fetched yet
+   */
+  getSnapshot(): ConvoSnapshot | null;
+
+  /**
+   * Consult backend server to refresh convo to be latest
+   */
+  syncConvo(): Promise<void>;
+
+  /**
+   * Navigate to a node, scroll to it and switch branch if necessary
+   */
+  navigateToNode(targetNodeId: string): Promise<void>;
+
+  /**
+   * Register a listener that is triggered on snapshot update
+   *
+   * Note that a new snapshot will always be fetched on syncConv().
+   * But if it is the same as the current snapshot, this listener won't be called.
+   */
+  subscribe(listener: (snapshot: ConvoSnapshot) => void): () => void;
+}
+```
+
+While there could be many reasons for a snapshot to change, these reasons are irrelavent to the nav ui. The nav ui only needs to know that "old snapshot has changed into a new snapshot".
+
+The platform-specific convo controller impl will be responsible for detecting various types of event, including
+
+- user switch branch by clicking button
+
+  Mutation observer
+
+- user submit new message
+
+  Mutation observer
+
+- user edit an existing message
+
+  Mutation observer
+
+- user change convo url (click another convo)
+
+  We can use a mutation observer that observes the entire document, and check current `location.href` with previous url, to detect url change within a SPA.
+
+  ```typescript
+  // Source - https://stackoverflow.com/a/67825703
+  // Posted by d-_-b, modified by community. See post 'Timeline' for change history
+  // Retrieved 2026-05-20, License - CC BY-SA 4.0
+  let previousUrl = "";
+  const observer = new MutationObserver(function (mutations) {
+    if (location.href !== previousUrl) {
+      previousUrl = location.href;
+      console.log(`URL changed to ${location.href}`);
+    }
+  });
+  const config = { subtree: true, childList: true };
+  observer.observe(document, config);
+  ```
 
 ### Platform-agnostic Nav UI
 
-We will initialize an instance of convo adaptor in content script, and pass it to our LLM Chat Navigator UI as prop. This way, we can define the UI in a platform-agnostic way.
+We will initialize an instance of convo controller in content script, and pass it to our LLM Chat Navigator UI as prop. This way, we can define the UI in a platform-agnostic way.
 
-Later, if we want to mount the UI to a popup window, we may need to wrap the convo adaptor in an instance that send message to content script, and pass that wrapped convo api to the nav ui as prop.
+Later, if we want to mount the UI to a popup window, we may need to wrap the convo controller in an instance that send message to content script, and pass that wrapped convo api to the nav ui as prop.

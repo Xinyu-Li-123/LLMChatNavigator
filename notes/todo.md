@@ -14,6 +14,8 @@
 
 - [ ] Add a popup window for editing message in our nav ui. We will add a button to invoke this popup in the in-place edit msg window in nav ui.
 
+- [ ] Toggle nav ui view mode: allow user to hide message text, show it as a circle, and only show text on hover. Do we really want this?
+
 - [x] Can we hide the popup button after clicking it and expanding the popup pane?
 
 - [x] We should load the tree once, and avoid re-parsing everything when we expand-hide-expand the window.
