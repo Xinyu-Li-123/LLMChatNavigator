@@ -1,3 +1,6 @@
+// TODO: Modularize this UI so that we can add ChatNavPopupWindowUi
+// which creates a popup window user can drag to a second screen
+
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { FolderTree, Maximize2, MessagesSquare, Minimize2, Minus } from 'lucide-react';
 
@@ -18,8 +21,7 @@ import {
   type ProviderUiConfig,
 } from '@/src/shared/navigatorUiConfig';
 import ConversationNavigator from '@/src/ui/ConversationNavigator';
-import type { NavigatorApi } from '@/src/ui/ConversationNavigator';
-import { editMessage, fetchNavigatorSnapshot, navigateToNode, submitReply } from './chatgptContentApi';
+import type { ConvoController } from '@/src/convo/ConvoController';
 
 type PaneRect = {
   left: number;
@@ -57,11 +59,8 @@ const RESIZE_HANDLES: ResizeHandle[] = [
   { key: 'bottom-left', x: -1, y: 1, className: 'bottom-0 left-0 h-4 w-4 cursor-nesw-resize' },
 ];
 
-const contentApi: NavigatorApi = {
-  fetchSnapshot: fetchNavigatorSnapshot,
-  navigateToNode,
-  editMessage,
-  submitReply,
+type ChatGptFloatingUiProps = {
+  controller: ConvoController;
 };
 
 function getDefaultPosition(): Position {
@@ -196,7 +195,10 @@ async function loadLegacyButtonPosition(): Promise<Position | null> {
   return typeof saved?.x === 'number' && typeof saved?.y === 'number' ? saved : null;
 }
 
-export default function ChatGptFloatingUi() {
+/**
+ * A floating overlay that display the LLMChatNavigator UI. Can be expanded / collapsed by a button.
+ */
+export default function ChatNavFloatingUi({ controller }: ChatGptFloatingUiProps) {
   const defaultExtensionConfig = useMemo(() => defaultExtensionUiConfig(), []);
   const defaultConfig = useMemo(() => defaultProviderUiConfig(), []);
   // TODO: position is part of the provider ui config, since we may want different window size and positiion on different websites
@@ -532,7 +534,7 @@ export default function ChatGptFloatingUi() {
 
           <div className="min-h-0 flex-1 overflow-hidden rounded-xl bg-background">
             <ConversationNavigator
-              api={contentApi}
+              controller={controller}
               compact
               theme={theme}
               onThemeChange={handleThemeChange}

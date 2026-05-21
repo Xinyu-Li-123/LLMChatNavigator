@@ -16,6 +16,8 @@
 
 - [ ] Toggle nav ui view mode: allow user to hide message text, show it as a circle, and only show text on hover. Do we really want this?
 
+- [ ] Allow replying to a node inside the nav ui. Note that this is different from editing a node, since replying will append new message.
+
 - [x] Can we hide the popup button after clicking it and expanding the popup pane?
 
 - [x] We should load the tree once, and avoid re-parsing everything when we expand-hide-expand the window.
@@ -25,6 +27,10 @@
 ## Bug
 
 - [ ] ChatGPT has pagination in infinite-scroll style. We need some way to allow navigating to messages that are not loaded in current page
+
+- [ ] `data-turn-id-container` and `data-message-id` are two different values. One turn can contain multiple messages from chatgpt, e.g. it first make tool call, then produce CoT, and finally output answer, making it 3 messages in one turn.
+
+- [ ] Remove the non-message node, e.g. node that makes tool call
 
 ## Maintenance
 

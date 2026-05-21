@@ -22,21 +22,13 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
-import { visibleText } from '@/src/shared/chatgptTree';
+import type { ConvoController } from '@/src/convo/ConvoController';
+import type { ConvoSnapshot } from '@/src/convo/types';
 import type { NavigatorTheme } from '@/src/shared/navigatorUiConfig';
-import type { ConversationNode, NavigatorSnapshot } from '@/src/shared/types';
-
-export type NavigatorApi = {
-  fetchSnapshot(options?: { force?: boolean }): Promise<NavigatorSnapshot>;
-  navigateToNode(nodeId: string): Promise<void>;
-  // TODO: This is unnecessary. We don't need to reflect the user input in webapge msg edit box in real-time.
-  // Instead, we just need to submit the user input in the webpage.
-  editMessage(nodeId: string, text: string): Promise<void>;
-  submitReply(parentNodeId: string, text: string): Promise<void>;
-};
+import type { ConvoNode } from '@/src/shared/types';
 
 type ConversationNavigatorProps = {
-  api: NavigatorApi;
+  controller: ConvoController;
   compact?: boolean;
   theme?: NavigatorTheme;
   onThemeChange?: (theme: NavigatorTheme) => void;
@@ -57,7 +49,7 @@ type EditDialogState = {
 };
 
 type DisplayItem = {
-  node: ConversationNode;
+  node: ConvoNode;
   childIds: string[];
 };
 
@@ -68,7 +60,7 @@ type DisplayTree = {
 };
 
 type MessageNodeData = {
-  node: ConversationNode;
+  node: ConvoNode;
   displayedChildCount: number;
   selected: boolean;
   compact: boolean;
@@ -81,28 +73,34 @@ const NODE_HEIGHT = 124;
 const X_GAP = 44;
 const Y_GAP = 96;
 
-function roleLabel(role: ConversationNode['role']) {
+function roleLabel(role: ConvoNode['role']) {
   if (role === 'user') return 'You';
   if (role === 'assistant') return 'Assistant';
   return role;
 }
 
-function roleClass(role: ConversationNode['role']) {
+function roleClass(role: ConvoNode['role']) {
   if (role === 'user') return 'bg-blue-500/10 text-blue-700 dark:text-blue-300';
   if (role === 'assistant') return 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300';
   return 'bg-muted text-muted-foreground';
 }
 
-function isConversationNode(node: ConversationNode): boolean {
+function isConversationNode(node: ConvoNode): boolean {
   return (node.role === 'user' || node.role === 'assistant') && Boolean(node.text.trim());
 }
 
-function matchesQuery(node: ConversationNode, query: string): boolean {
+function matchesQuery(node: ConvoNode, query: string): boolean {
   if (!query) return true;
   return `${node.role} ${node.text}`.toLowerCase().includes(query);
 }
 
-function buildDisplayTree(snapshot: NavigatorSnapshot | null, query: string): DisplayTree {
+function visibleText(text: string, limit = 140): string {
+  const normalized = text.replace(/\s+/g, ' ').trim();
+  if (!normalized) return '(empty message)';
+  return normalized.length > limit ? `${normalized.slice(0, limit - 1)}...` : normalized;
+}
+
+function buildDisplayTree(snapshot: ConvoSnapshot | null, query: string): DisplayTree {
   const items = new Map<string, DisplayItem>();
   const roots: string[] = [];
   let conversationNodeCount = 0;
@@ -111,7 +109,7 @@ function buildDisplayTree(snapshot: NavigatorSnapshot | null, query: string): Di
   const normalizedQuery = query.trim().toLowerCase();
   const { tree } = snapshot;
 
-  function addDisplayedNode(node: ConversationNode, parentId: string | null) {
+  function addDisplayedNode(node: ConvoNode, parentId: string | null) {
     if (!items.has(node.id)) {
       items.set(node.id, { node, childIds: [] });
     }
@@ -144,8 +142,8 @@ function buildDisplayTree(snapshot: NavigatorSnapshot | null, query: string): Di
   return { roots, items, conversationNodeCount };
 }
 
-function selectedConversationNodeId(snapshot: NavigatorSnapshot): string | null {
-  let current = snapshot.tree.currentNodeId;
+function selectedConversationNodeId(snapshot: ConvoSnapshot): string | null {
+  let current = snapshot.curNodeId;
   const seen = new Set<string>();
 
   while (current && snapshot.tree.nodes[current] && !seen.has(current)) {
@@ -245,7 +243,6 @@ function MessageNode({ data }: NodeProps<MessageFlowNode>) {
         'w-[260px] rounded-lg border bg-card p-3 text-card-foreground shadow-sm transition-shadow',
         data.selected && 'border-primary shadow-md ring-2 ring-primary/20',
         data.node.isCurrentPath && !data.selected && 'border-primary/40',
-        !data.node.isVisible && 'opacity-70',
       )}
     >
       <Handle type="target" position={FlowPosition.Top} className="opacity-0" />
@@ -280,8 +277,13 @@ const flowStyle: ReactFlowCssProperties = {
   '--xy-controls-button-color-hover': 'var(--foreground)',
 };
 
+/**
+ * A div that contains a ReactFlow graph, and a floating, collapsable toolbar of buttons 
+ * that can operate on the graph (e.g. switch to dark mode). 
+ * This component is reuseable in both ChatNavFloatingUi and ChatNavPopupWindowUi.
+ */
 export default function ConversationNavigator({
-  api,
+  controller,
   compact = false,
   theme = 'auto',
   onThemeChange,
@@ -289,7 +291,7 @@ export default function ConversationNavigator({
   onUtilityRowCollapsedChange,
   onTitleChange,
 }: ConversationNavigatorProps) {
-  const [snapshot, setSnapshot] = useState<NavigatorSnapshot | null>(null);
+  const [snapshot, setSnapshot] = useState<ConvoSnapshot | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const query = '';
   const [loading, setLoading] = useState(false);
@@ -304,11 +306,13 @@ export default function ConversationNavigator({
   const savedViewportRef = useRef<Viewport | null>(null);
   const fitInitialViewRef = useRef(false);
 
-  async function refresh(options: { force?: boolean } = {}) {
+  async function refresh() {
     setLoading(true);
     setError(null);
     try {
-      const next = await api.fetchSnapshot(options);
+      await controller.syncConvo();
+      const next = controller.getSnapshot();
+      if (!next) throw new Error('No conversation snapshot is available after refresh.');
       setSnapshot(next);
       setSelectedNodeId(selectedConversationNodeId(next));
     } catch (err) {
@@ -339,10 +343,10 @@ export default function ConversationNavigator({
 
   useEffect(() => {
     void refresh();
-  }, []);
+  }, [controller]);
 
   useEffect(() => {
-    onTitleChange?.(snapshot?.tree.title ?? 'Current conversation');
+    onTitleChange?.(snapshot?.convoMetadata.convoTitle ?? 'Current conversation');
   }, [onTitleChange, snapshot]);
 
   useEffect(() => {
@@ -383,14 +387,16 @@ export default function ConversationNavigator({
   };
   const ThemeIcon = themeOptionMeta[theme].icon;
 
-  async function runAction(label: string, action: () => Promise<void>, refreshAfter = true) {
+  async function runAction(label: string, action: () => Promise<void>, refreshAfter = true): Promise<boolean> {
     setBusyAction(label);
     setError(null);
     try {
       await action();
-      if (refreshAfter) await refresh({ force: true });
+      if (refreshAfter) await refresh();
+      return true;
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
+      return false;
     } finally {
       setBusyAction(null);
     }
@@ -412,8 +418,8 @@ export default function ConversationNavigator({
     const nodeId = contextMenu.nodeId;
     setContextMenu(null);
     setSelectedNodeId(nodeId);
-    void runAction('navigate', () => api.navigateToNode(nodeId), false);
-  }, [api, contextMenu]);
+    void runAction('navigate', () => controller.navigateToNode(nodeId), false);
+  }, [controller, contextMenu]);
 
   const handleOpenEdit = useCallback(() => {
     if (!menuNode) return;
@@ -422,12 +428,16 @@ export default function ConversationNavigator({
   }, [menuNode]);
 
   const handleSubmitEdit = useCallback(() => {
-    if (!editDialog) return;
+    if (!editDialog || !snapshot) return;
     const { nodeId, text } = editDialog;
-    void runAction('edit', () => api.editMessage(nodeId, text)).then(() => {
-      setEditDialog(null);
+    const node = snapshot.tree.nodes[nodeId];
+    void runAction('edit', async () => {
+      if (!node?.parentId) throw new Error('Cannot resend a root message.');
+      await controller.submitReply(node.parentId, text);
+    }).then((success) => {
+      if (success) setEditDialog(null);
     });
-  }, [api, editDialog]);
+  }, [controller, editDialog, snapshot]);
 
   const handleGoToSelected = useCallback(() => {
     if (!selectedNodeId) return;
@@ -444,9 +454,9 @@ export default function ConversationNavigator({
         );
       }
 
-      await api.navigateToNode(selectedNodeId);
+      await controller.navigateToNode(selectedNodeId);
     }, false);
-  }, [api, flowElements.nodes, selectedNodeId]);
+  }, [controller, flowElements.nodes, selectedNodeId]);
 
   const body = (
     <div className="relative flex h-full min-h-0 flex-col bg-background text-foreground">
@@ -548,7 +558,7 @@ export default function ConversationNavigator({
               size="icon"
               variant="ghost"
               className="h-9 w-9"
-              onClick={() => void refresh({ force: true })}
+              onClick={() => void refresh()}
               disabled={loading}
               title="Refresh tree"
               aria-label="Refresh tree"
@@ -630,7 +640,7 @@ export default function ConversationNavigator({
               type="button"
               className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-accent"
               onClick={handleOpenEdit}
-              disabled={Boolean(busyAction)}
+              disabled={Boolean(busyAction) || !menuNode.parentId}
             >
               <Edit3 className="h-4 w-4" />
               Edit and resend
@@ -681,7 +691,7 @@ export default function ConversationNavigator({
               <Button type="button" variant="outline" onClick={() => setEditDialog(null)} disabled={Boolean(busyAction)}>
                 Cancel
               </Button>
-              <Button type="button" onClick={handleSubmitEdit} disabled={!editDialog.text.trim() || Boolean(busyAction)}>
+              <Button type="button" onClick={handleSubmitEdit} disabled={!editDialog.text.trim() || Boolean(busyAction) || !editNode.parentId}>
                 {busyAction === 'edit' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Edit3 className="h-4 w-4" />}
                 Resend
               </Button>
@@ -697,7 +707,7 @@ export default function ConversationNavigator({
   return (
     <Card className="h-full overflow-hidden">
       <CardHeader className="sr-only">
-        <CardTitle>ChatGPT Tree Navigator</CardTitle>
+        <CardTitle>ChatGpt Tree Navigator</CardTitle>
       </CardHeader>
       <CardContent className="h-full p-0">{body}</CardContent>
     </Card>

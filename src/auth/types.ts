@@ -1,4 +1,5 @@
-export type SupportedPlatform = 'chatgpt' | 'claude' | 'deepseek';
+// TODO: export type SupportedPlatform = 'chatgpt' | 'claude' | 'deepseek';
+export type SupportedPlatform = 'chatgpt';
 
 export type AuthFetchRequestPayload = {
   url: string;

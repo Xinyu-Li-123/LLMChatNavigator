@@ -29,7 +29,7 @@ export type ChatGptConversationResponse = {
   mapping?: Record<string, ChatGptRawNode>;
 };
 
-export type ConversationNode = {
+export type ConvoNode = {
   id: string;
   role: MessageRole;
   text: string;
@@ -41,13 +41,13 @@ export type ConversationNode = {
   createTime?: number | null;
 };
 
-export type ConversationTree = {
+export type ConvoTree = {
   provider: ChatProvider;
   conversationId: string;
   title: string;
   currentNodeId: string | null;
   rootIds: string[];
-  nodes: Record<string, ConversationNode>;
+  nodes: Record<string, ConvoNode>;
 };
 
 export type BranchStep = {
@@ -57,7 +57,7 @@ export type BranchStep = {
 };
 
 export type NavigatorSnapshot = {
-  tree: ConversationTree;
+  tree: ConvoTree;
   visibleMissingNodeIds: string[];
 };
 
