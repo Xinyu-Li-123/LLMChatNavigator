@@ -110,7 +110,7 @@ function getChatGptTurnElementForMessage(messageId: string): HTMLElement {
 
 async function scrollToChatGptNode(messageId: string): Promise<void> {
   const element = getChatGptMessageElement(messageId);
-  element.scrollIntoView({ behavior: 'smooth', block: 'start', inline: 'nearest' });
+  element.scrollIntoView();
   await sleep(120);
 }
 
@@ -156,7 +156,7 @@ async function editChatGptMessage(node: ConvoNode, text: string): Promise<void> 
   ensureNotNull(textarea, `Textarea not found after opening editor for message ${node.id}`);
 
   setNativeTextareaValue(textarea, text);
-  messageElement.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' });
+  messageElement.scrollIntoView();
 
   let current: Element | null = textarea;
   let submitButton: HTMLButtonElement | null = null;

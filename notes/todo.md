@@ -28,11 +28,17 @@
 
 - [ ] ChatGPT has pagination in infinite-scroll style. We need some way to allow navigating to messages that are not loaded in current page
 
-- [ ] `data-turn-id-container` and `data-message-id` are two different values. One turn can contain multiple messages from chatgpt, e.g. it first make tool call, then produce CoT, and finally output answer, making it 3 messages in one turn.
+  We can modify the implementation of `scrollStep.execute()` to keep scrolling until hit or not found
+
+  To do this, we need to first parse the webpage to find furthest possible message's id, scroll to it, wait for DOM to load (either timeout or MutationObserver), and scan-and-scroll again. Do this until target message id is present in the page.
 
 - [ ] Remove the non-message node, e.g. node that makes tool call
 
 - [ ] Disable edit and resend option for non-user message
+
+- [ ] Add a virtual head node so that branching on first message work
+
+- [x] `data-turn-id-container` and `data-message-id` are two different values. One turn can contain multiple messages from chatgpt, e.g. it first make tool call, then produce CoT, and finally output answer, making it 3 messages in one turn.
 
 ## Maintenance
 
