@@ -206,6 +206,7 @@ export default function ChatNavFloatingUi({ controller }: ChatGptFloatingUiProps
   const [open, setOpen] = useState(false);
   const [hasOpened, setHasOpened] = useState(false);
   const [theme, setTheme] = useState<NavigatorTheme>(defaultExtensionConfig.theme);
+  const [isDebug, setIsDebug] = useState(defaultExtensionConfig.isDebug);
   const [prefersDark, setPrefersDark] = useState(() => systemPrefersDark());
   const [conversationTitle, setConversationTitle] = useState('Current conversation');
   const [utilityRowCollapsed, setUtilityRowCollapsed] = useState(defaultExtensionConfig.utilityRowCollapsed);
@@ -271,6 +272,7 @@ export default function ChatNavFloatingUi({ controller }: ChatGptFloatingUiProps
       const nextPosition = clampPosition(savedConfig.floatingButtonPosition ?? legacyPosition ?? getDefaultPosition());
       const nextPaneRect = paneRectFromConfig(savedConfig.pane);
       setTheme(savedExtensionConfig.theme);
+      setIsDebug(savedExtensionConfig.isDebug);
       setUtilityRowCollapsed(savedExtensionConfig.utilityRowCollapsed);
       setPosition(nextPosition);
       setPaneSide(savedConfig.pane.side);
@@ -321,12 +323,17 @@ export default function ChatNavFloatingUi({ controller }: ChatGptFloatingUiProps
 
   function handleThemeChange(next: NavigatorTheme) {
     setTheme(next);
-    void saveExtensionUiConfig({ theme: next, utilityRowCollapsed });
+    void saveExtensionUiConfig({ theme: next, isDebug, utilityRowCollapsed });
+  }
+
+  function handleDebugChange(next: boolean) {
+    setIsDebug(next);
+    void saveExtensionUiConfig({ theme, isDebug: next, utilityRowCollapsed });
   }
 
   function handleUtilityRowCollapsedChange(collapsed: boolean) {
     setUtilityRowCollapsed(collapsed);
-    void saveExtensionUiConfig({ theme, utilityRowCollapsed: collapsed });
+    void saveExtensionUiConfig({ theme, isDebug, utilityRowCollapsed: collapsed });
   }
 
   function handleDragPointerDown(event: ReactPointerEvent<HTMLElement>, mode: 'button' | 'pane') {
@@ -538,6 +545,8 @@ export default function ChatNavFloatingUi({ controller }: ChatGptFloatingUiProps
               compact
               theme={theme}
               onThemeChange={handleThemeChange}
+              isDebug={isDebug}
+              onDebugChange={handleDebugChange}
               utilityRowCollapsed={utilityRowCollapsed}
               onUtilityRowCollapsedChange={handleUtilityRowCollapsedChange}
               onTitleChange={setConversationTitle}

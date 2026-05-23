@@ -16,7 +16,7 @@ import {
   type ReactFlowInstance,
   type Viewport,
 } from '@xyflow/react';
-import { Check, ChevronLeft, ChevronRight, Edit3, Loader2, LocateFixed, Moon, RefreshCw, Search, Sun, SunMoon, X } from 'lucide-react';
+import { Bug, Check, ChevronLeft, ChevronRight, Edit3, Loader2, LocateFixed, Moon, RefreshCw, Search, Sun, SunMoon, X } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -32,6 +32,8 @@ type ConversationNavigatorProps = {
   compact?: boolean;
   theme?: NavigatorTheme;
   onThemeChange?: (theme: NavigatorTheme) => void;
+  isDebug?: boolean;
+  onDebugChange?: (isDebug: boolean) => void;
   utilityRowCollapsed?: boolean;
   onUtilityRowCollapsedChange?: (collapsed: boolean) => void;
   onTitleChange?: (title: string) => void;
@@ -64,6 +66,7 @@ type MessageNodeData = {
   displayedChildCount: number;
   selected: boolean;
   compact: boolean;
+  isDebug: boolean;
 } & Record<string, unknown>;
 
 type MessageFlowNode = Node<MessageNodeData, 'message'>;
@@ -143,7 +146,7 @@ function buildDisplayTree(snapshot: ConvoSnapshot | null, query: string): Displa
 }
 
 function selectedConversationNodeId(snapshot: ConvoSnapshot): string | null {
-  let current = snapshot.curNodeId;
+  let current = snapshot.tree.curNodeId;
   const seen = new Set<string>();
 
   while (current && snapshot.tree.nodes[current] && !seen.has(current)) {
@@ -160,6 +163,7 @@ function layoutDisplayTree(
   displayTree: DisplayTree,
   selectedNodeId: string | null,
   compact: boolean,
+  isDebug: boolean,
 ): { nodes: MessageFlowNode[]; edges: Edge[] } {
   const subtreeWidths = new Map<string, number>();
   const nodes: MessageFlowNode[] = [];
@@ -197,6 +201,7 @@ function layoutDisplayTree(
         displayedChildCount: item.childIds.length,
         selected: item.node.id === selectedNodeId,
         compact,
+        isDebug,
       },
       draggable: false,
       selectable: true,
@@ -236,11 +241,12 @@ function layoutDisplayTree(
 
 function MessageNode({ data }: NodeProps<MessageFlowNode>) {
   const childCount = data.displayedChildCount;
+  const messageTextClassName = data.isDebug ? 'line-clamp-4' : 'line-clamp-5';
 
   return (
     <div
       className={cn(
-        'w-[260px] rounded-lg border bg-card p-3 text-card-foreground shadow-sm transition-shadow',
+        'flex h-[124px] w-[260px] flex-col rounded-lg border bg-card p-3 text-card-foreground shadow-sm transition-shadow',
         data.selected && 'border-primary shadow-md ring-2 ring-primary/20',
         data.node.isCurrentPath && !data.selected && 'border-primary/40',
       )}
@@ -256,7 +262,14 @@ function MessageNode({ data }: NodeProps<MessageFlowNode>) {
           </span>
         ) : null}
       </div>
-      <div className="line-clamp-5 text-xs leading-snug">{visibleText(data.node.text, data.compact ? 180 : 220)}</div>
+      <div className={cn('flex-1 overflow-hidden text-xs leading-snug', messageTextClassName)}>
+        {visibleText(data.node.text, data.compact ? 180 : 220)}
+      </div>
+      {data.isDebug ? (
+        <div className="mt-2 truncate text-[10px] text-muted-foreground">
+          {data.node.id}
+        </div>
+      ) : null}
       <Handle type="source" position={FlowPosition.Bottom} className="opacity-0" />
     </div>
   );
@@ -287,6 +300,8 @@ export default function ConversationNavigator({
   compact = false,
   theme = 'auto',
   onThemeChange,
+  isDebug = true,
+  onDebugChange,
   utilityRowCollapsed = false,
   onUtilityRowCollapsedChange,
   onTitleChange,
@@ -372,8 +387,8 @@ export default function ConversationNavigator({
   const displayTree = useMemo(() => buildDisplayTree(snapshot, query), [query, snapshot]);
 
   const flowElements = useMemo(
-    () => layoutDisplayTree(displayTree, selectedNodeId, compact),
-    [compact, displayTree, selectedNodeId],
+    () => layoutDisplayTree(displayTree, selectedNodeId, compact, isDebug),
+    [compact, displayTree, isDebug, selectedNodeId],
   );
 
   const selectedNode = selectedNodeId && snapshot ? snapshot.tree.nodes[selectedNodeId] : null;
@@ -552,6 +567,20 @@ export default function ConversationNavigator({
                   </div>
                 ) : null}
               </div>
+            ) : null}
+            {onDebugChange ? (
+              <Button
+                type="button"
+                size="icon"
+                variant="ghost"
+                className={cn('h-9 w-9', isDebug && 'bg-accent/60')}
+                onClick={() => onDebugChange(!isDebug)}
+                title={isDebug ? 'Hide debug details' : 'Show debug details'}
+                aria-label={isDebug ? 'Hide debug details' : 'Show debug details'}
+                aria-pressed={isDebug}
+              >
+                <Bug className="h-4 w-4" />
+              </Button>
             ) : null}
             <Button
               type="button"
