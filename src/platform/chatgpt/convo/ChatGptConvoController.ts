@@ -38,12 +38,19 @@ function waitForDomChange(root: Element | Document = document, timeout = 2500): 
   });
 }
 
-function waitForFirstChildDomMutation(root: Element | Document = document, timeout = 2500): Promise<boolean> {
+function nodeContainsMessageElement(node: Node): boolean {
+  if (node.nodeType !== Node.ELEMENT_NODE) return false;
+
+  const element = node as Element;
+  return element.hasAttribute('data-message-id') || Boolean(element.querySelector('[data-message-id]'));
+}
+
+function waitForFirstAddedMessageNode(root: Element | Document = document, timeout = 2500): Promise<boolean> {
   return new Promise((resolve) => {
     let timer: number | undefined;
 
     const observer = new MutationObserver((mutations) => {
-      if (mutations.length > 0) {
+      if (mutations.some((mutation) => Array.from(mutation.addedNodes).some(nodeContainsMessageElement))) {
         if (timer !== undefined) window.clearTimeout(timer);
         observer.disconnect();
         window.setTimeout(() => resolve(true), 80);
@@ -271,7 +278,7 @@ class ScrollStep implements NavStep {
       lastRenderedIndex = rendered.index;
       const mutTimeout = 2500;
       const root = document.querySelector('main') ?? document.body;
-      const mutationPromise = waitForFirstChildDomMutation(root, mutTimeout);
+      const mutationPromise = waitForFirstAddedMessageNode(root, mutTimeout);
       await scrollChatGptMessageElement(rendered.element, this.path.block);
       const mutated = await mutationPromise;
       if (!mutated) {
