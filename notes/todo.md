@@ -48,6 +48,8 @@
 
 ## Maintenance
 
+- [ ] Cleanup unused code caused by the previously ignored source code files (the `*.ign.*` files)
+
 ## Performance
 
 ## Nope
