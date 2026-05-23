@@ -38,6 +38,30 @@ function waitForDomChange(root: Element | Document = document, timeout = 2500): 
   });
 }
 
+function waitForFirstChildDomMutation(root: Element | Document = document, timeout = 2500): Promise<boolean> {
+  return new Promise((resolve) => {
+    let timer: number | undefined;
+
+    const observer = new MutationObserver((mutations) => {
+      if (mutations.length > 0) {
+        if (timer !== undefined) window.clearTimeout(timer);
+        observer.disconnect();
+        window.setTimeout(() => resolve(true), 80);
+      }
+    });
+
+    timer = window.setTimeout(() => {
+      observer.disconnect();
+      resolve(false);
+    }, timeout);
+
+    observer.observe(root, {
+      childList: true,
+      subtree: true,
+    });
+  });
+}
+
 function triggerNativeEvents(element: Element | null | undefined): void {
   if (!element) return;
   const events = [
@@ -108,10 +132,44 @@ function getChatGptTurnElementForMessage(messageId: string): HTMLElement {
   );
 }
 
-async function scrollToChatGptNode(messageId: string): Promise<void> {
-  const element = getChatGptMessageElement(messageId);
-  element.scrollIntoView();
+async function scrollChatGptMessageElement(
+  element: HTMLElement,
+  block: ScrollLogicalPosition = 'start',
+): Promise<void> {
+  element.scrollIntoView({ block, inline: 'nearest' });
   await sleep(120);
+}
+
+function getMountedChatGptMessageElements(): Map<string, HTMLElement> {
+  const elements = new Map<string, HTMLElement>();
+
+  for (const element of Array.from(document.querySelectorAll<HTMLElement>('[data-message-id]'))) {
+    const messageId = element.getAttribute('data-message-id');
+    if (messageId && !elements.has(messageId)) elements.set(messageId, element);
+  }
+
+  return elements;
+}
+
+type RenderedPathMessage = {
+  index: number;
+  nodeId: string;
+  element: HTMLElement;
+};
+
+function findFurthestRenderedPathMessage(pathNodeIds: readonly string[]): RenderedPathMessage | null {
+  const mountedElements = getMountedChatGptMessageElements();
+  let furthest: RenderedPathMessage | null = null;
+
+  for (let index = 0; index < pathNodeIds.length; index++) {
+    const nodeId = pathNodeIds[index];
+    if (!nodeId) continue;
+
+    const element = mountedElements.get(nodeId);
+    if (element) furthest = { index, nodeId, element };
+  }
+
+  return furthest;
 }
 
 function setNativeTextareaValue(textarea: HTMLTextAreaElement, text: string): void {
@@ -174,11 +232,53 @@ interface NavStep {
   execute(): Promise<void>;
 }
 
-class ScrollStep implements NavStep {
-  constructor(private readonly nodeId: string) { }
+type ScrollPath = {
+  nodeIds: string[];
+  block: ScrollLogicalPosition;
+};
 
+class ScrollStep implements NavStep {
+  private readonly targetNodeId: string;
+
+  constructor(private readonly path: ScrollPath) {
+    ensure(path.nodeIds.length > 0, 'ScrollStep path must not be empty.');
+    const targetNodeId = path.nodeIds[path.nodeIds.length - 1];
+    ensureNotNull(targetNodeId, 'ScrollStep path must have a target node.');
+    this.targetNodeId = targetNodeId;
+  }
+
+  /**
+   * Scroll from current node to a target node, in the presence of lazy loading.
+   */
   async execute(): Promise<void> {
-    await scrollToChatGptNode(this.nodeId);
+    let lastRenderedIndex = -1;
+
+    // ChatGPT webpage use lazy loading to render the messages. If a message is far away 
+    // from current message in the view, it won't be added in the DOM until you scroll towards it.
+    // This means, ScrollStep.execute() need to keep scrolling along the path 
+    // from current node to target node until target node is rendered
+    while (true) {
+      const rendered = findFurthestRenderedPathMessage(this.path.nodeIds);
+      if (!rendered || rendered.index <= lastRenderedIndex) {
+        throw new Error(`Failed to execute ScrollStep for message ${this.targetNodeId}: can't proceed any further along the path from current message to target message because no further node on the path is found.`);
+      }
+
+      if (rendered.nodeId === this.targetNodeId) {
+        await scrollChatGptMessageElement(rendered.element);
+        return;
+      }
+
+      lastRenderedIndex = rendered.index;
+      const mutTimeout = 2500;
+      const root = document.querySelector('main') ?? document.body;
+      const mutationPromise = waitForFirstChildDomMutation(root, mutTimeout);
+      await scrollChatGptMessageElement(rendered.element, this.path.block);
+      const mutated = await mutationPromise;
+      if (!mutated) {
+        throw new Error(`Failed to execute ScrollStep for message ${this.targetNodeId}: can't proceed any further along the path from current message to target message because scrolling to top / bottom didn't lead to new elements being rendered within timeout of ${mutTimeout}ms. This could either because timeout is too short or something is wrong with the webpage`);
+      }
+    }
+    throw new Error(`Failed to execute ScrollStep for message ${this.targetNodeId}: You shouldn't be able to reach this point.`);
   }
 }
 
@@ -288,6 +388,8 @@ class ChatGptHtmlMsgTree {
     }
 
     if (divergenceIdx > 0) {
+      let scrollSourceNodeId = fromNodeId;
+
       for (let index = divergenceIdx - 1; index < targetPath.length - 1; index++) {
         const parentId = targetPath[index];
         const childId = targetPath[index + 1];
@@ -296,13 +398,17 @@ class ChatGptHtmlMsgTree {
         ensure(targetBranchIdx >= 0, `Message ${childId} is not a child of message ${parentId}`);
 
         if (parent.childIds.length > 1) {
-          steps.push(new ScrollStep(parentId));
+          steps.push(new ScrollStep(this.getScrollPath(scrollSourceNodeId, parentId)));
+          scrollSourceNodeId = parentId;
           steps.push(new BranchStep(parentId, targetBranchIdx, parent.childIds.length));
         }
       }
+
+      steps.push(new ScrollStep(this.getScrollPath(scrollSourceNodeId, toNodeId)));
+      return steps;
     }
 
-    steps.push(new ScrollStep(toNodeId));
+    steps.push(new ScrollStep(this.getScrollPath(fromNodeId, toNodeId)));
     return steps;
   }
 
@@ -320,6 +426,37 @@ class ChatGptHtmlMsgTree {
     }
 
     return path.reverse();
+  }
+
+  private getScrollPath(fromNodeId: string, toNodeId: string): ScrollPath {
+    const fromPath = this.getPathToRoot(fromNodeId);
+    const targetPath = this.getPathToRoot(toNodeId);
+
+    let divergenceIdx = 0;
+    while (
+      divergenceIdx < fromPath.length &&
+      divergenceIdx < targetPath.length &&
+      fromPath[divergenceIdx] === targetPath[divergenceIdx]
+    ) {
+      divergenceIdx += 1;
+    }
+
+    ensure(
+      divergenceIdx > 0,
+      `Messages ${fromNodeId} and ${toNodeId} do not share a conversation root.`,
+    );
+    ensure(
+      divergenceIdx === fromPath.length || divergenceIdx === targetPath.length,
+      `ScrollStep path from ${fromNodeId} to ${toNodeId} must stay within one branch.`,
+    );
+
+    return {
+      nodeIds: [
+        ...fromPath.slice(divergenceIdx - 1).reverse(),
+        ...targetPath.slice(divergenceIdx),
+      ],
+      block: divergenceIdx === targetPath.length && fromNodeId !== toNodeId ? 'start' : 'end',
+    };
   }
 
   private getNode(nodeId: string): ConvoNode {
