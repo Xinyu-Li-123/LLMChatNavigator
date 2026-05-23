@@ -78,28 +78,38 @@ function triggerDeep(element: Element, depth = 0): void {
   for (const child of Array.from(element.children)) triggerDeep(child, depth + 1);
 }
 
-function findChatGptMessageElement(nodeId: string): HTMLElement | null {
-  // TODO: When selecting a node, we should select it by data-message-id
-  // TODO: When constructing EditMsgBox, we should select the node by data-message-id, 
-  // and then select the outer section box (or element in general) that contains a data-turn-id attribute. Note that
-  // data-turn-id-container and data-message-id 
-  return document.querySelector<HTMLElement>(`[data-turn-id-container="${CSS.escape(nodeId)}"]`);
+function findChatGptMessageElement(messageId: string): HTMLElement | null {
+  return document.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(messageId)}"]`);
 }
 
-function getChatGptMessageElement(nodeId: string): HTMLElement {
-  const element = findChatGptMessageElement(nodeId);
-  ensureNotNull(element, `Message element not found: ${nodeId}`);
+function getChatGptMessageElement(messageId: string): HTMLElement {
+  const element = findChatGptMessageElement(messageId);
+  ensureNotNull(element, `Message element not found: ${messageId}`);
   return element;
 }
 
-function getChatGptMessageContainer(messageElement: HTMLElement): HTMLElement {
-  return messageElement.closest<HTMLElement>('article')
-    ?? messageElement.parentElement?.parentElement
-    ?? messageElement;
+function getChatGptTurnElementFromMessageElement(
+  messageElement: HTMLElement,
+  messageId: string,
+): HTMLElement {
+  const turnElement =
+    messageElement.closest<HTMLElement>('[data-turn-id]')
+    ?? messageElement.closest<HTMLElement>('[data-turn-id-container]')
+    ?? messageElement.closest<HTMLElement>('article');
+
+  ensureNotNull(turnElement, `Turn element not found for message ${messageId}`);
+  return turnElement;
 }
 
-async function scrollToChatGptNode(nodeId: string): Promise<void> {
-  const element = getChatGptMessageElement(nodeId);
+function getChatGptTurnElementForMessage(messageId: string): HTMLElement {
+  return getChatGptTurnElementFromMessageElement(
+    getChatGptMessageElement(messageId),
+    messageId,
+  );
+}
+
+async function scrollToChatGptNode(messageId: string): Promise<void> {
+  const element = getChatGptMessageElement(messageId);
   element.scrollIntoView({ behavior: 'smooth', block: 'start', inline: 'nearest' });
   await sleep(120);
 }
@@ -125,23 +135,23 @@ function findEditButton(container: HTMLElement, role: MessageRole): HTMLButtonEl
 
 async function editChatGptMessage(node: ConvoNode, text: string): Promise<void> {
   const messageElement = getChatGptMessageElement(node.id);
-  const container = getChatGptMessageContainer(messageElement);
+  const turnElement = getChatGptTurnElementFromMessageElement(messageElement, node.id);
 
   let editButton: HTMLButtonElement | undefined;
   for (let attempt = 0; attempt < 50 && !editButton; attempt++) {
-    triggerDeep(messageElement);
-    editButton = findEditButton(container, node.role);
+    triggerDeep(turnElement);
+    editButton = findEditButton(turnElement, node.role);
     if (!editButton) await sleep(100);
   }
 
   ensureNotNull(editButton, `Edit button not found for message ${node.id}`);
   editButton.click();
-  await waitForDomChange(container);
+  await waitForDomChange(turnElement);
 
-  let textarea = container.querySelector<HTMLTextAreaElement>('textarea');
+  let textarea = turnElement.querySelector<HTMLTextAreaElement>('textarea');
   for (let attempt = 0; attempt < 5 && !textarea; attempt++) {
     await sleep(100);
-    textarea = container.querySelector<HTMLTextAreaElement>('textarea');
+    textarea = turnElement.querySelector<HTMLTextAreaElement>('textarea');
   }
   ensureNotNull(textarea, `Textarea not found after opening editor for message ${node.id}`);
 
@@ -157,7 +167,7 @@ async function editChatGptMessage(node: ConvoNode, text: string): Promise<void> 
 
   ensureNotNull(submitButton, `Send button not found for message ${node.id}`);
   submitButton.click();
-  await waitForDomChange(container);
+  await waitForDomChange(turnElement);
 }
 
 interface NavStep {
@@ -177,21 +187,23 @@ class BranchNavBox {
   private readonly nextBtn: HTMLButtonElement;
   private readonly counterEl: HTMLElement;
 
-  constructor(private readonly nodeId: string) {
-    const nodeElem = getChatGptMessageElement(nodeId);
-    const prevBtn = nodeElem.querySelector<HTMLButtonElement>('button[aria-label="Previous response"]');
-    ensureNotNull(prevBtn, `Can't find previous branch button in message node ${nodeId}`);
+  constructor(private readonly messageId: string) {
+    const turnElement = getChatGptTurnElementForMessage(messageId);
+    triggerDeep(turnElement);
+
+    const prevBtn = turnElement.querySelector<HTMLButtonElement>('button[aria-label="Previous response"]');
+    ensureNotNull(prevBtn, `Can't find previous branch button in message node ${messageId}`);
     this.prevBtn = prevBtn;
 
-    const nextBtn = nodeElem.querySelector<HTMLButtonElement>('button[aria-label="Next response"]');
-    ensureNotNull(nextBtn, `Can't find next branch button in message node ${nodeId}`);
+    const nextBtn = turnElement.querySelector<HTMLButtonElement>('button[aria-label="Next response"]');
+    ensureNotNull(nextBtn, `Can't find next branch button in message node ${messageId}`);
     this.nextBtn = nextBtn;
 
     const navBox = prevBtn.parentElement;
-    ensureNotNull(navBox, `Can't find branch nav box in message node ${nodeId}`);
+    ensureNotNull(navBox, `Can't find branch nav box in message node ${messageId}`);
 
     const counterEl = navBox.querySelector<HTMLElement>('.tabular-nums');
-    ensureNotNull(counterEl, `Can't find branch counter in message node ${nodeId}`);
+    ensureNotNull(counterEl, `Can't find branch counter in message node ${messageId}`);
     this.counterEl = counterEl;
   }
 
@@ -199,7 +211,7 @@ class BranchNavBox {
     const counterText = this.counterEl.textContent?.trim() ?? '';
     const match = counterText.match(/^(\d+)\s*\/\s*(\d+)$/);
     const curBranchIdx = match ? Number(match[1]) - 1 : null;
-    ensureNotNull(curBranchIdx, `Failed to find current branch index for message ${this.nodeId}`);
+    ensureNotNull(curBranchIdx, `Failed to find current branch index for message ${this.messageId}`);
     return curBranchIdx;
   }
 
@@ -207,7 +219,7 @@ class BranchNavBox {
     const counterText = this.counterEl.textContent?.trim() ?? '';
     const match = counterText.match(/^(\d+)\s*\/\s*(\d+)$/);
     const totalBranches = match ? Number(match[2]) : null;
-    ensureNotNull(totalBranches, `Failed to find total branches for message ${this.nodeId}`);
+    ensureNotNull(totalBranches, `Failed to find total branches for message ${this.messageId}`);
     return totalBranches;
   }
 

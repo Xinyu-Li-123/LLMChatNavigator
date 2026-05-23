@@ -32,6 +32,8 @@
 
 - [ ] Remove the non-message node, e.g. node that makes tool call
 
+- [ ] Disable edit and resend option for non-user message
+
 ## Maintenance
 
 ## Performance
