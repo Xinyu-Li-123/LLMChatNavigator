@@ -199,6 +199,8 @@ type ScrollPath = {
   block: ScrollLogicalPosition;
 };
 
+type BranchDirection = 'prev' | 'next';
+
 class ScrollStep implements NavStep {
   private readonly targetNodeId: string;
 
@@ -294,40 +296,118 @@ class BranchNavBox {
 }
 
 class BranchStep implements NavStep {
+  private readonly parentId: string;
+  private readonly currentSiblingIndex: number;
+  private readonly targetSiblingIndex: number;
+
   constructor(
-    private readonly nodeId: string,
-    private readonly targetBranchIdx: number,
-    private readonly childCount: number,
+    private readonly tree: ConvoTree,
+    private readonly currentNodeId: string,
+    private readonly targetNodeId: string,
+    private readonly direction: BranchDirection,
+    private readonly steps: number,
   ) {
+    ensure(steps >= 1, 'BranchStep must have at least one navigation step.');
+    ensure(currentNodeId !== targetNodeId, 'BranchStep current node and target node must differ.');
+
+    const currentNode = this.getNode(currentNodeId);
+    const targetNode = this.getNode(targetNodeId);
+    ensureNotNull(currentNode.parentId, `BranchStep current node ${currentNodeId} has no parent.`);
     ensure(
-      targetBranchIdx >= 0 && targetBranchIdx < childCount,
-      `Invalid branch target ${targetBranchIdx} for message ${nodeId}`,
+      currentNode.parentId === targetNode.parentId,
+      `BranchStep nodes ${currentNodeId} and ${targetNodeId} must share the same parent.`,
+    );
+
+    this.parentId = currentNode.parentId;
+    this.currentSiblingIndex = currentNode.siblingIndex;
+    this.targetSiblingIndex = targetNode.siblingIndex;
+
+    // TODO: Do we really need to recompute num step?
+    const expectedDirection: BranchDirection =
+      this.currentSiblingIndex < this.targetSiblingIndex ? 'next' : 'prev';
+    const expectedSteps = Math.abs(this.targetSiblingIndex - this.currentSiblingIndex);
+
+    ensure(
+      expectedSteps === steps,
+      `BranchStep step count mismatch from ${currentNodeId} to ${targetNodeId}: expected ${expectedSteps}, got ${steps}.`,
+    );
+    ensure(
+      expectedDirection === direction,
+      `BranchStep direction mismatch from ${currentNodeId} to ${targetNodeId}: expected ${expectedDirection}, got ${direction}.`,
     );
   }
 
   async execute(): Promise<void> {
-    for (let attempt = 0; attempt < this.childCount + 4; attempt++) {
-      const branchNavBox = new BranchNavBox(this.nodeId);
-      const curBranchIdx = branchNavBox.getCurBranchIdx();
-      const totalBranches = branchNavBox.getTotalBranches();
+    let currentNodeId = this.currentNodeId;
 
+    for (let stepIndex = 0; stepIndex < this.steps; stepIndex++) {
+      const expectedSiblingIndex = this.currentSiblingIndex + this.stepDelta() * stepIndex;
+      const expectedNode = this.getNode(currentNodeId);
       ensure(
-        this.childCount === totalBranches,
-        `Stored branch count (${this.childCount}) does not match ChatGpt branch count (${totalBranches}) for message ${this.nodeId}`,
+        expectedNode.siblingIndex === expectedSiblingIndex,
+        `BranchStep expected current node ${currentNodeId} to be sibling index ${expectedSiblingIndex}, got ${expectedNode.siblingIndex}.`,
       );
 
-      if (curBranchIdx === this.targetBranchIdx) return;
+      const branchNavBox = new BranchNavBox(currentNodeId);
+      const curBranchIdx = branchNavBox.getCurBranchIdx();
+      const totalBranches = branchNavBox.getTotalBranches();
+      const siblingIds = this.getSiblingIds();
 
-      if (curBranchIdx > this.targetBranchIdx) {
+      ensure(
+        siblingIds.length === totalBranches,
+        `Stored branch count (${siblingIds.length}) does not match ChatGpt branch count (${totalBranches}) for message ${currentNodeId}.`,
+      );
+      ensure(
+        curBranchIdx === expectedSiblingIndex,
+        `BranchStep expected message ${currentNodeId} to show branch index ${expectedSiblingIndex}, got ${curBranchIdx}.`,
+      );
+
+      if (this.direction === 'prev') {
         branchNavBox.clickPrev();
       } else {
         branchNavBox.clickNext();
       }
 
       await waitForDomChange(document.querySelector('main') ?? document.body, 1200);
+      currentNodeId = this.getNextNodeId(currentNodeId);
     }
 
-    throw new Error(`Failed to switch message ${this.nodeId} to branch ${this.targetBranchIdx}`);
+    const finalNavBox = new BranchNavBox(currentNodeId);
+    const finalBranchIdx = finalNavBox.getCurBranchIdx();
+    ensure(
+      currentNodeId === this.targetNodeId,
+      `BranchStep ended at unexpected node ${currentNodeId}; expected ${this.targetNodeId}.`,
+    );
+    ensure(
+      finalBranchIdx === this.targetSiblingIndex,
+      `BranchStep expected target node ${this.targetNodeId} to show branch index ${this.targetSiblingIndex}, got ${finalBranchIdx}.`,
+    );
+  }
+
+  private getNode(nodeId: string): ConvoNode {
+    const node = this.tree.nodes[nodeId];
+    ensureNotNull(node, `Message node ${nodeId} does not exist in the current conversation tree`);
+    return node;
+  }
+
+  private getSiblingIds(): string[] {
+    const parent = this.getNode(this.parentId);
+    return parent.childIds;
+  }
+
+  private stepDelta(): -1 | 1 {
+    return this.direction === 'prev' ? -1 : 1;
+  }
+
+  private getNextNodeId(currentNodeId: string): string {
+    const currentNode = this.getNode(currentNodeId);
+    const nextSiblingIndex = currentNode.siblingIndex + this.stepDelta();
+    const nextNodeId = this.getSiblingIds()[nextSiblingIndex];
+    ensureNotNull(
+      nextNodeId,
+      `BranchStep could not find next sibling from ${currentNodeId} in direction ${this.direction}.`,
+    );
+    return nextNodeId;
   }
 }
 
@@ -350,18 +430,28 @@ class ChatGptHtmlMsgTree {
 
     if (divergenceIdx > 0) {
       let scrollSourceNodeId = fromNodeId;
+      let activePath = fromPath;
 
       for (let index = divergenceIdx - 1; index < targetPath.length - 1; index++) {
         const parentId = targetPath[index];
-        const childId = targetPath[index + 1];
+        const currentChildId = this.getPathChildId(activePath, index, parentId);
+        const targetChildId = targetPath[index + 1];
         const parent = this.getNode(parentId);
-        const targetBranchIdx = parent.childIds.indexOf(childId);
-        ensure(targetBranchIdx >= 0, `Message ${childId} is not a child of message ${parentId}`);
+        ensureNotNull(currentChildId, `Failed to determine current child under branching parent ${parentId}.`);
+        ensure(
+          parent.childIds.includes(currentChildId),
+          `Message ${currentChildId} is not a child of message ${parentId}.`,
+        );
+        ensure(
+          parent.childIds.includes(targetChildId),
+          `Message ${targetChildId} is not a child of message ${parentId}.`,
+        );
 
-        if (parent.childIds.length > 1) {
-          steps.push(new ScrollStep(this.getScrollPath(scrollSourceNodeId, parentId)));
-          scrollSourceNodeId = parentId;
-          steps.push(new BranchStep(parentId, targetBranchIdx, parent.childIds.length));
+        if (parent.childIds.length > 1 && currentChildId !== targetChildId) {
+          steps.push(new ScrollStep(this.getScrollPath(scrollSourceNodeId, currentChildId)));
+          steps.push(this.buildBranchStep(currentChildId, targetChildId));
+          scrollSourceNodeId = targetChildId;
+          activePath = targetPath;
         }
       }
 
@@ -418,6 +508,24 @@ class ChatGptHtmlMsgTree {
       ],
       block: divergenceIdx === targetPath.length && fromNodeId !== toNodeId ? 'start' : 'end',
     };
+  }
+
+  private getPathChildId(path: readonly string[], parentIndex: number, parentId: string): string | null {
+    const childId = path[parentIndex + 1] ?? null;
+    if (!childId) return null;
+
+    const child = this.getNode(childId);
+    return child.parentId === parentId ? childId : null;
+  }
+
+  private buildBranchStep(currentNodeId: string, targetNodeId: string): BranchStep {
+    const currentNode = this.getNode(currentNodeId);
+    const targetNode = this.getNode(targetNodeId);
+    const direction: BranchDirection =
+      currentNode.siblingIndex < targetNode.siblingIndex ? 'next' : 'prev';
+    const steps = Math.abs(targetNode.siblingIndex - currentNode.siblingIndex);
+
+    return new BranchStep(this.tree, currentNodeId, targetNodeId, direction, steps);
   }
 
   private getNode(nodeId: string): ConvoNode {
