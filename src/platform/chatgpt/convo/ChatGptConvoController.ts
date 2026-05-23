@@ -69,46 +69,6 @@ function waitForFirstAddedMessageNode(root: Element | Document = document, timeo
   });
 }
 
-function triggerNativeEvents(element: Element | null | undefined): void {
-  if (!element) return;
-  const events = [
-    'mouseover',
-    'mouseenter',
-    'mousemove',
-    'mousedown',
-    'mouseup',
-    'click',
-    'pointerover',
-    'pointerenter',
-    'pointerdown',
-    'pointerup',
-    'pointermove',
-    'pointercancel',
-    'focus',
-    'focusin',
-  ];
-
-  for (const eventName of events) {
-    try {
-      element.dispatchEvent(
-        new MouseEvent(eventName, {
-          bubbles: true,
-          cancelable: true,
-          view: window,
-        }),
-      );
-    } catch {
-      // Ignore synthetic event failures. The following selector attempts report real failures.
-    }
-  }
-}
-
-function triggerDeep(element: Element, depth = 0): void {
-  if (depth > 5) return;
-  triggerNativeEvents(element);
-  for (const child of Array.from(element.children)) triggerDeep(child, depth + 1);
-}
-
 function findChatGptMessageElement(messageId: string): HTMLElement | null {
   return document.querySelector<HTMLElement>(`[data-message-id="${CSS.escape(messageId)}"]`);
 }
@@ -123,11 +83,7 @@ function getChatGptTurnElementFromMessageElement(
   messageElement: HTMLElement,
   messageId: string,
 ): HTMLElement {
-  const turnElement =
-    messageElement.closest<HTMLElement>('[data-turn-id]')
-    ?? messageElement.closest<HTMLElement>('[data-turn-id-container]')
-    ?? messageElement.closest<HTMLElement>('article');
-
+  const turnElement = messageElement.closest<HTMLElement>('[data-turn-id]');
   ensureNotNull(turnElement, `Turn element not found for message ${messageId}`);
   return turnElement;
 }
@@ -204,7 +160,6 @@ async function editChatGptMessage(node: ConvoNode, text: string): Promise<void> 
 
   let editButton: HTMLButtonElement | undefined;
   for (let attempt = 0; attempt < 50 && !editButton; attempt++) {
-    triggerDeep(turnElement);
     editButton = findEditButton(turnElement, node.role);
     if (!editButton) await sleep(100);
   }
@@ -296,7 +251,6 @@ class BranchNavBox {
 
   constructor(private readonly messageId: string) {
     const turnElement = getChatGptTurnElementForMessage(messageId);
-    triggerDeep(turnElement);
 
     const prevBtn = turnElement.querySelector<HTMLButtonElement>('button[aria-label="Previous response"]');
     ensureNotNull(prevBtn, `Can't find previous branch button in message node ${messageId}`);
