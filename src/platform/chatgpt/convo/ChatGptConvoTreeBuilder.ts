@@ -87,14 +87,100 @@ function getPathToTreeRoot(
   return path.reverse();
 }
 
-export function applyCurrentPathState(tree: ConvoTree, curNodeId: string | null): ConvoTree {
-  const currentPathSet = new Set(getPathToTreeRoot(curNodeId, tree));
+function getLastChildId(node: Pick<ConvoNode, 'childIds'>): string | null {
+  return node.childIds.at(-1) ?? null;
+}
+
+export function buildDefaultSelectedChildIdByParentId(
+  tree: Pick<ConvoTree, 'nodes' | 'rootIds'>,
+  leafNodeId: string | null,
+): Record<string, string> {
+  const selectedChildIdByParentId: Record<string, string> = {};
+
+  for (const node of Object.values(tree.nodes)) {
+    if (node.childIds.length > 1) {
+      const lastChildId = getLastChildId(node);
+      if (lastChildId) selectedChildIdByParentId[node.id] = lastChildId;
+    }
+  }
+
+  const path = getPathToTreeRoot(leafNodeId, tree);
+  for (let index = 0; index < path.length - 1; index++) {
+    const parentId = path[index];
+    const childId = path[index + 1];
+    const parent = tree.nodes[parentId];
+    if (parent && parent.childIds.length > 1) {
+      selectedChildIdByParentId[parentId] = childId;
+    }
+  }
+
+  return selectedChildIdByParentId;
+}
+
+export function normalizeSelectedChildIdByParentId(
+  tree: Pick<ConvoTree, 'nodes' | 'rootIds'>,
+  selectedChildIdByParentId: Record<string, string>,
+): Record<string, string> {
+  const normalized = buildDefaultSelectedChildIdByParentId(tree, null);
+
+  for (const [parentId, childId] of Object.entries(selectedChildIdByParentId)) {
+    const parent = tree.nodes[parentId];
+    if (!parent || parent.childIds.length <= 1) continue;
+    if (!parent.childIds.includes(childId)) continue;
+    normalized[parentId] = childId;
+  }
+
+  return normalized;
+}
+
+function buildActivePathNodeIds(
+  tree: Pick<ConvoTree, 'nodes' | 'rootIds'>,
+  uiCurNodeId: string | null,
+  selectedChildIdByParentId: Record<string, string>,
+): string[] {
+  const path = getPathToTreeRoot(uiCurNodeId, tree);
+  const seen = new Set(path);
+  let currentId = path.at(-1) ?? null;
+
+  while (currentId) {
+    const node = tree.nodes[currentId];
+    if (!node) break;
+
+    let nextChildId: string | null = null;
+    if (node.childIds.length === 1) {
+      nextChildId = node.childIds[0] ?? null;
+    } else if (node.childIds.length > 1) {
+      nextChildId = selectedChildIdByParentId[node.id] ?? getLastChildId(node);
+    }
+
+    if (!nextChildId || seen.has(nextChildId)) break;
+    path.push(nextChildId);
+    seen.add(nextChildId);
+    currentId = nextChildId;
+  }
+
+  return path;
+}
+
+export function applyCurrentPathState(
+  tree: ConvoTree,
+  uiCurNodeId: string | null,
+  selectedChildIdByParentId: Record<string, string>,
+): ConvoTree {
+  const normalizedSelectedChildIdByParentId = normalizeSelectedChildIdByParentId(
+    tree,
+    selectedChildIdByParentId,
+  );
+  const currentPathSet = new Set(
+    buildActivePathNodeIds(tree, uiCurNodeId, normalizedSelectedChildIdByParentId),
+  );
 
   for (const node of Object.values(tree.nodes)) {
     node.isCurrentPath = currentPathSet.has(node.id);
   }
 
-  tree.uiCurNodeId = curNodeId;
+  tree.uiCurNodeId = uiCurNodeId;
+  tree.selectedChildIdByParentId = normalizedSelectedChildIdByParentId;
   return tree;
 }
 
@@ -132,6 +218,7 @@ export function buildChatGptConversationTree(raw: ChatGptConversationResponse): 
     title: raw.title ?? 'ChatGpt conversation',
     backendCurNodeId,
     uiCurNodeId: backendCurNodeId,
+    selectedChildIdByParentId: {},
     rootIds,
     nodes,
   };
@@ -141,10 +228,12 @@ export function buildConvoSnapshotFromChatGptResponse(
   response: ChatGptConversationResponse,
   convoUrl = location.href,
 ): ConvoSnapshot {
-  const tree = applyCurrentPathState(
-    buildChatGptConversationTree(response),
+  const tree = buildChatGptConversationTree(response);
+  const selectedChildIdByParentId = buildDefaultSelectedChildIdByParentId(
+    tree,
     response.current_node ?? null,
   );
+  applyCurrentPathState(tree, response.current_node ?? null, selectedChildIdByParentId);
 
   return {
     convoMetadata: {

@@ -5,6 +5,7 @@ import type { ApiResult, ChatGptConversationResponse, ConvoNode, ConvoTree, Mess
 import { ensure, ensureNotNull } from '@/src/utils';
 import {
   applyCurrentPathState,
+  buildDefaultSelectedChildIdByParentId,
   buildConvoSnapshotFromChatGptResponse,
   getChatGptConversationIdFromUrl,
 } from './ChatGptConvoTreeBuilder';
@@ -201,6 +202,11 @@ type ScrollPath = {
 };
 
 type BranchDirection = 'prev' | 'next';
+type SelectedChildIdByParentId = Record<string, string>;
+type NavigationPlan = {
+  steps: NavStep[];
+  selectedChildIdByParentId: SelectedChildIdByParentId;
+};
 
 class ScrollStep implements NavStep {
   private readonly targetNodeId: string;
@@ -415,10 +421,13 @@ class BranchStep implements NavStep {
 class ChatGptHtmlMsgTree {
   constructor(private readonly tree: ConvoTree) { }
 
-  computeNavPath(srcNodeId: string, tgtNodeId: string): NavStep[] {
+  computeNavPath(srcNodeId: string, tgtNodeId: string): NavigationPlan {
     const srcPath = this.getPathToRoot(srcNodeId);
     const targetPath = this.getPathToRoot(tgtNodeId);
     const steps: NavStep[] = [];
+    const selectedChildIdByParentId = {
+      ...this.tree.selectedChildIdByParentId,
+    };
 
     let divergenceIdx = 0;
     while (
@@ -431,37 +440,35 @@ class ChatGptHtmlMsgTree {
 
     if (divergenceIdx > 0) {
       let scrollSourceNodeId = srcNodeId;
-      let activePath = srcPath;
 
       for (let index = divergenceIdx - 1; index < targetPath.length - 1; index++) {
         const parentId = targetPath[index];
-        const currentChildId = this.getPathChildId(activePath, index, parentId);
         const targetChildId = targetPath[index + 1];
         const parent = this.getNode(parentId);
-        ensureNotNull(currentChildId, `Failed to determine current child under branching parent ${parentId}.`);
-        ensure(
-          parent.childIds.includes(currentChildId),
-          `Message ${currentChildId} is not a child of message ${parentId}.`,
-        );
         ensure(
           parent.childIds.includes(targetChildId),
           `Message ${targetChildId} is not a child of message ${parentId}.`,
         );
 
-        if (parent.childIds.length > 1 && currentChildId !== targetChildId) {
-          steps.push(new ScrollStep(this.getScrollPath(scrollSourceNodeId, currentChildId)));
-          steps.push(this.buildBranchStep(currentChildId, targetChildId));
-          scrollSourceNodeId = targetChildId;
-          activePath = targetPath;
+        if (parent.childIds.length > 1) {
+          const currentChildId = this.getSelectedChildId(parentId, selectedChildIdByParentId);
+          ensureNotNull(currentChildId, `Failed to determine current child under branching parent ${parentId}.`);
+
+          if (currentChildId !== targetChildId) {
+            steps.push(new ScrollStep(this.getScrollPath(scrollSourceNodeId, currentChildId)));
+            steps.push(this.buildBranchStep(currentChildId, targetChildId));
+            selectedChildIdByParentId[parentId] = targetChildId;
+            scrollSourceNodeId = targetChildId;
+          }
         }
       }
 
       steps.push(new ScrollStep(this.getScrollPath(scrollSourceNodeId, tgtNodeId)));
-      return steps;
+      return { steps, selectedChildIdByParentId };
     }
 
     steps.push(new ScrollStep(this.getScrollPath(srcNodeId, tgtNodeId)));
-    return steps;
+    return { steps, selectedChildIdByParentId };
   }
 
   /**
@@ -514,12 +521,18 @@ class ChatGptHtmlMsgTree {
     };
   }
 
-  private getPathChildId(path: readonly string[], parentIndex: number, parentId: string): string | null {
-    const childId = path[parentIndex + 1] ?? null;
-    if (!childId) return null;
+  private getSelectedChildId(
+    parentId: string,
+    selectedChildIdByParentId: SelectedChildIdByParentId,
+  ): string | null {
+    const parent = this.getNode(parentId);
+    if (parent.childIds.length === 0) return null;
+    if (parent.childIds.length === 1) return parent.childIds[0] ?? null;
 
-    const child = this.getNode(childId);
-    return child.parentId === parentId ? childId : null;
+    const selectedChildId = selectedChildIdByParentId[parentId];
+    if (selectedChildId && parent.childIds.includes(selectedChildId)) return selectedChildId;
+
+    return parent.childIds.at(-1) ?? null;
   }
 
   private buildBranchStep(currentNodeId: string, targetNodeId: string): BranchStep {
@@ -551,13 +564,28 @@ export default class ChatGptConvoController implements ConvoController {
   async syncConvo(): Promise<void> {
     const response = await this.fetchRawConversation();
     const nextSnapshot = buildConvoSnapshotFromChatGptResponse(response, location.href);
+    const defaultSelectedChildIdByParentId = buildDefaultSelectedChildIdByParentId(
+      nextSnapshot.tree,
+      nextSnapshot.tree.backendCurNodeId,
+    );
+    const mergedSelectedChildIdByParentId = { ...defaultSelectedChildIdByParentId };
+    for (const [parentId, childId] of Object.entries(this.snapshot?.tree.selectedChildIdByParentId ?? {})) {
+      const parent = nextSnapshot.tree.nodes[parentId];
+      if (!parent || parent.childIds.length <= 1) continue;
+      if (!parent.childIds.includes(childId)) continue;
+      mergedSelectedChildIdByParentId[parentId] = childId;
+    }
     const preservedUiCurNodeId = this.snapshot?.tree.uiCurNodeId;
     const nextUiCurNodeId =
       preservedUiCurNodeId && nextSnapshot.tree.nodes[preservedUiCurNodeId]
         ? preservedUiCurNodeId
         : nextSnapshot.tree.backendCurNodeId;
 
-    applyCurrentPathState(nextSnapshot.tree, nextUiCurNodeId);
+    applyCurrentPathState(
+      nextSnapshot.tree,
+      nextUiCurNodeId,
+      mergedSelectedChildIdByParentId,
+    );
     this.snapshot = nextSnapshot;
   }
 
@@ -566,13 +594,18 @@ export default class ChatGptConvoController implements ConvoController {
     const uiCurNodeId = snapshot.tree.uiCurNodeId;
     ensureNotNull(uiCurNodeId, 'Cannot navigate because the current conversation node is unknown.');
 
-    const navPath = new ChatGptHtmlMsgTree(snapshot.tree).computeNavPath(uiCurNodeId, targetNodeId);
-    for (const navStep of navPath) {
+    const navigationPlan = new ChatGptHtmlMsgTree(snapshot.tree).computeNavPath(uiCurNodeId, targetNodeId);
+    for (const navStep of navigationPlan.steps) {
       await navStep.execute();
     }
-    applyCurrentPathState(snapshot.tree, targetNodeId);
+    applyCurrentPathState(
+      snapshot.tree,
+      targetNodeId,
+      navigationPlan.selectedChildIdByParentId,
+    );
     // TODO: This only tracks controller-driven navigation. If the user switches branches
-    // directly in ChatGPT's UI, uiCurNodeId becomes stale until we add live DOM observation.
+    // directly in ChatGPT's UI, uiCurNodeId and selectedChildIdByParentId become stale
+    // until we add live DOM observation.
   }
 
   async submitReply(parentNodeId: string, text: string): Promise<void> {

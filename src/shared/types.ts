@@ -47,6 +47,7 @@ export type ConvoTree = {
   title: string;
   backendCurNodeId: string | null;
   uiCurNodeId: string | null;
+  selectedChildIdByParentId: Record<string, string>;
   rootIds: string[];
   nodes: Record<string, ConvoNode>;
 };
