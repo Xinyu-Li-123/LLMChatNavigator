@@ -4,6 +4,7 @@ import type { ConvoSnapshot } from '@/src/convo/types';
 import type { ApiResult, ChatGptConversationResponse, ConvoNode, ConvoTree, MessageRole } from '@/src/shared/types';
 import { ensure, ensureNotNull } from '@/src/utils';
 import {
+  CHATGPT_VIRTUAL_ROOT_ID,
   applyCurrentPathState,
   buildDefaultSelectedChildIdByParentId,
   buildConvoSnapshotFromChatGptResponse,
@@ -121,6 +122,10 @@ type RenderedPathMessage = {
   nodeId: string;
   element: HTMLElement;
 };
+
+function isVirtualRootNodeId(nodeId: string): boolean {
+  return nodeId === CHATGPT_VIRTUAL_ROOT_ID;
+}
 
 function findFurthestRenderedPathMessage(pathNodeIds: readonly string[]): RenderedPathMessage | null {
   const mountedElements = getMountedChatGptMessageElements();
@@ -591,6 +596,7 @@ export default class ChatGptConvoController implements ConvoController {
 
   async navigateToNode(targetNodeId: string): Promise<void> {
     const snapshot = await this.ensureSnapshot();
+    ensure(!isVirtualRootNodeId(targetNodeId), 'Cannot navigate to the virtual root node.');
     const uiCurNodeId = snapshot.tree.uiCurNodeId;
     ensureNotNull(uiCurNodeId, 'Cannot navigate because the current conversation node is unknown.');
 
@@ -610,6 +616,7 @@ export default class ChatGptConvoController implements ConvoController {
 
   async submitReply(parentNodeId: string, text: string): Promise<void> {
     const snapshot = await this.ensureSnapshot();
+    ensure(!isVirtualRootNodeId(parentNodeId), 'Cannot resend a top-level message yet.');
     const parent = snapshot.tree.nodes[parentNodeId];
     ensureNotNull(parent, `Unknown parent node ${parentNodeId}.`);
     const childId = parent.childIds[0];

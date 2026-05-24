@@ -67,6 +67,7 @@ type MessageNodeData = {
   selected: boolean;
   compact: boolean;
   isDebug: boolean;
+  isVirtualRoot: boolean;
 } & Record<string, unknown>;
 
 type MessageFlowNode = Node<MessageNodeData, 'message'>;
@@ -90,6 +91,10 @@ function roleClass(role: ConvoNode['role']) {
 
 function isConversationNode(node: ConvoNode): boolean {
   return (node.role === 'user' || node.role === 'assistant') && Boolean(node.text.trim());
+}
+
+function isVirtualRootNode(snapshot: ConvoSnapshot | null, nodeId: string): boolean {
+  return snapshot?.tree.rootNodeId === nodeId;
 }
 
 function matchesQuery(node: ConvoNode, query: string): boolean {
@@ -130,10 +135,11 @@ function buildDisplayTree(snapshot: ConvoSnapshot | null, query: string): Displa
     if (!node) return;
 
     const isConversation = isConversationNode(node);
+    const isVirtualRoot = node.id === tree.rootNodeId;
     if (isConversation) conversationNodeCount += 1;
 
     let nextAncestorId = nearestDisplayedAncestorId;
-    if (isConversation && matchesQuery(node, normalizedQuery)) {
+    if (isVirtualRoot || (isConversation && matchesQuery(node, normalizedQuery))) {
       addDisplayedNode(node, nearestDisplayedAncestorId);
       nextAncestorId = node.id;
     }
@@ -202,9 +208,10 @@ function layoutDisplayTree(
         selected: item.node.id === selectedNodeId,
         compact,
         isDebug,
+        isVirtualRoot: item.node.id === displayTree.roots[0] && item.node.parentId === null,
       },
       draggable: false,
-      selectable: true,
+      selectable: item.node.parentId !== null,
     });
 
     let childLeft = left + Math.max(0, width - childRowWidth(item.childIds)) / 2;
@@ -240,6 +247,16 @@ function layoutDisplayTree(
 }
 
 function MessageNode({ data }: NodeProps<MessageFlowNode>) {
+  if (data.isVirtualRoot) {
+    return (
+      <div className="flex h-[124px] w-[260px] items-center justify-center">
+        <Handle type="target" position={FlowPosition.Top} className="opacity-0" />
+        <div className="h-5 w-16 rounded-full border border-dashed border-muted-foreground/40 bg-muted/30" />
+        <Handle type="source" position={FlowPosition.Bottom} className="opacity-0" />
+      </div>
+    );
+  }
+
   const childCount = data.displayedChildCount;
   const messageTextClassName = data.isDebug ? 'line-clamp-4' : 'line-clamp-5';
 
@@ -392,8 +409,10 @@ export default function ConversationNavigator({
   );
 
   const selectedNode = selectedNodeId && snapshot ? snapshot.tree.nodes[selectedNodeId] : null;
+  const selectedNodeIsVirtualRoot = selectedNodeId ? isVirtualRootNode(snapshot, selectedNodeId) : false;
   const menuNode = contextMenu && snapshot ? snapshot.tree.nodes[contextMenu.nodeId] : null;
   const editNode = editDialog && snapshot ? snapshot.tree.nodes[editDialog.nodeId] : null;
+  const menuNodeCanEdit = Boolean(menuNode?.parentId) && menuNode?.parentId !== snapshot?.tree.rootNodeId;
 
   const themeOptionMeta: Record<NavigatorTheme, { label: string; title: string; icon: typeof Sun }> = {
     auto: { label: 'Auto', title: 'Use system theme', icon: SunMoon },
@@ -418,6 +437,11 @@ export default function ConversationNavigator({
   }
 
   const handleNodeContextMenu = useCallback<NodeMouseHandler<MessageFlowNode>>((event, node) => {
+    if (isVirtualRootNode(snapshot, node.id)) {
+      setContextMenu(null);
+      return;
+    }
+
     event.preventDefault();
     const bounds = flowWrapperRef.current?.getBoundingClientRect();
     setSelectedNodeId(node.id);
@@ -426,7 +450,7 @@ export default function ConversationNavigator({
       x: bounds ? event.clientX - bounds.left : event.clientX,
       y: bounds ? event.clientY - bounds.top : event.clientY,
     });
-  }, []);
+  }, [snapshot]);
 
   const handleSelectAndScroll = useCallback(() => {
     if (!contextMenu) return;
@@ -447,7 +471,9 @@ export default function ConversationNavigator({
     const { nodeId, text } = editDialog;
     const node = snapshot.tree.nodes[nodeId];
     void runAction('edit', async () => {
-      if (!node?.parentId) throw new Error('Cannot resend a root message.');
+      if (!node?.parentId || node.parentId === snapshot.tree.rootNodeId) {
+        throw new Error('Cannot resend a top-level message yet.');
+      }
       await controller.submitReply(node.parentId, text);
     }).then((success) => {
       if (success) setEditDialog(null);
@@ -455,7 +481,7 @@ export default function ConversationNavigator({
   }, [controller, editDialog, snapshot]);
 
   const handleGoToSelected = useCallback(() => {
-    if (!selectedNodeId) return;
+    if (!selectedNodeId || isVirtualRootNode(snapshot, selectedNodeId)) return;
 
     const selectedFlowNode = flowElements.nodes.find((node) => node.id === selectedNodeId);
     void runAction('navigate', async () => {
@@ -471,7 +497,7 @@ export default function ConversationNavigator({
 
       await controller.navigateToNode(selectedNodeId);
     }, false);
-  }, [controller, flowElements.nodes, selectedNodeId]);
+  }, [controller, flowElements.nodes, selectedNodeId, snapshot]);
 
   const body = (
     <div className="relative flex h-full min-h-0 flex-col bg-background text-foreground">
@@ -600,7 +626,7 @@ export default function ConversationNavigator({
               variant="ghost"
               className="h-9 w-9"
               onClick={handleGoToSelected}
-              disabled={!selectedNodeId || busyAction === 'navigate'}
+              disabled={!selectedNodeId || selectedNodeIsVirtualRoot || busyAction === 'navigate'}
               title="Select and scroll to selected message"
               aria-label="Select and scroll to selected message"
             >
@@ -635,6 +661,12 @@ export default function ConversationNavigator({
             onInit={handleFlowInit}
             onViewportChange={handleViewportChange}
             onNodeClick={(_, node) => {
+              if (isVirtualRootNode(snapshot, node.id)) {
+                setSelectedNodeId(null);
+                setContextMenu(null);
+                return;
+              }
+
               setSelectedNodeId(node.id);
               setContextMenu(null);
             }}
@@ -651,7 +683,7 @@ export default function ConversationNavigator({
           </div>
         )}
 
-        {contextMenu && menuNode ? (
+        {contextMenu && menuNode && !isVirtualRootNode(snapshot, menuNode.id) ? (
           <div
             className="absolute z-20 w-52 overflow-hidden rounded-md border bg-popover text-sm text-popover-foreground shadow-lg"
             style={{ left: contextMenu.x, top: contextMenu.y }}
@@ -669,7 +701,7 @@ export default function ConversationNavigator({
               type="button"
               className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-accent"
               onClick={handleOpenEdit}
-              disabled={Boolean(busyAction) || !menuNode.parentId}
+              disabled={Boolean(busyAction) || !menuNodeCanEdit}
             >
               <Edit3 className="h-4 w-4" />
               Edit and resend
@@ -681,7 +713,7 @@ export default function ConversationNavigator({
       <Separator />
 
       <div className="flex min-h-10 items-center gap-2 px-3 py-2 text-xs text-muted-foreground">
-        {selectedNode ? (
+        {selectedNode && !selectedNodeIsVirtualRoot ? (
           <>
             <span>Selected:</span>
             <span className="font-medium text-foreground">{roleLabel(selectedNode.role)}</span>
@@ -720,7 +752,11 @@ export default function ConversationNavigator({
               <Button type="button" variant="outline" onClick={() => setEditDialog(null)} disabled={Boolean(busyAction)}>
                 Cancel
               </Button>
-              <Button type="button" onClick={handleSubmitEdit} disabled={!editDialog.text.trim() || Boolean(busyAction) || !editNode.parentId}>
+              <Button
+                type="button"
+                onClick={handleSubmitEdit}
+                disabled={!editDialog.text.trim() || Boolean(busyAction) || !editNode?.parentId || editNode.parentId === snapshot?.tree.rootNodeId}
+              >
                 {busyAction === 'edit' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Edit3 className="h-4 w-4" />}
                 Resend
               </Button>

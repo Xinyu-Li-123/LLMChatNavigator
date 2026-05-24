@@ -7,6 +7,8 @@ import type {
   MessageRole,
 } from '@/src/shared/types';
 
+export const CHATGPT_VIRTUAL_ROOT_ID = '__virtual_root__';
+
 export function getChatGptConversationIdFromUrl(urlText = location.href): string | null {
   const url = new URL(urlText);
   if (url.origin !== 'https://chatgpt.com' && url.origin !== 'https://chat.openai.com') {
@@ -89,6 +91,20 @@ function getPathToTreeRoot(
 
 function getLastChildId(node: Pick<ConvoNode, 'childIds'>): string | null {
   return node.childIds.at(-1) ?? null;
+}
+
+function buildVirtualRootNode(childIds: string[]): ConvoNode {
+  return {
+    id: CHATGPT_VIRTUAL_ROOT_ID,
+    role: 'unknown',
+    text: '',
+    parentId: null,
+    childIds,
+    siblingIndex: 0,
+    isCurrentPath: false,
+    isVisible: true,
+    createTime: null,
+  };
 }
 
 export function buildDefaultSelectedChildIdByParentId(
@@ -188,10 +204,14 @@ export function buildChatGptConversationTree(raw: ChatGptConversationResponse): 
   const mapping = raw.mapping ?? {};
   const backendCurNodeId = raw.current_node ?? null;
   const nodes: Record<string, ConvoNode> = {};
+  const topLevelNodeIds: string[] = [];
 
   for (const [id, rawNode] of Object.entries(mapping)) {
-    const parentId = rawNode.parent ?? null;
-    const siblings = parentId ? mapping[parentId]?.children ?? [] : [];
+    const originalParentId = rawNode.parent ?? null;
+    if (!originalParentId) topLevelNodeIds.push(id);
+
+    const parentId = originalParentId ?? CHATGPT_VIRTUAL_ROOT_ID;
+    const siblings = originalParentId ? mapping[originalParentId]?.children ?? [] : topLevelNodeIds;
     const text = messageText(rawNode.message);
     const role = messageRole(rawNode.message);
 
@@ -208,14 +228,19 @@ export function buildChatGptConversationTree(raw: ChatGptConversationResponse): 
     };
   }
 
-  const rootIds = Object.values(nodes)
-    .filter((node) => !node.parentId)
-    .map((node) => node.id);
+  for (const [index, nodeId] of topLevelNodeIds.entries()) {
+    const node = nodes[nodeId];
+    if (node) node.siblingIndex = index;
+  }
+
+  nodes[CHATGPT_VIRTUAL_ROOT_ID] = buildVirtualRootNode(topLevelNodeIds);
+  const rootIds = [CHATGPT_VIRTUAL_ROOT_ID];
 
   return {
     provider: 'chatgpt',
     conversationId: raw.id ?? '',
     title: raw.title ?? 'ChatGpt conversation',
+    rootNodeId: CHATGPT_VIRTUAL_ROOT_ID,
     backendCurNodeId,
     uiCurNodeId: backendCurNodeId,
     selectedChildIdByParentId: {},
