@@ -8,6 +8,5 @@ export type ConvoMetadata = {
 
 export interface ConvoSnapshot {
   readonly convoMetadata: ConvoMetadata;
-  readonly curNodeId: string | null;
   readonly tree: ConvoTree;
 }

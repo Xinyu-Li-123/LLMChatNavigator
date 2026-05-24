@@ -146,7 +146,7 @@ function buildDisplayTree(snapshot: ConvoSnapshot | null, query: string): Displa
 }
 
 function selectedConversationNodeId(snapshot: ConvoSnapshot): string | null {
-  let current = snapshot.tree.curNodeId;
+  let current = snapshot.tree.uiCurNodeId;
   const seen = new Set<string>();
 
   while (current && snapshot.tree.nodes[current] && !seen.has(current)) {

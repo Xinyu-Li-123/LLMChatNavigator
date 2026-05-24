@@ -45,7 +45,8 @@ export type ConvoTree = {
   provider: ChatProvider;
   conversationId: string;
   title: string;
-  currentNodeId: string | null;
+  backendCurNodeId: string | null;
+  uiCurNodeId: string | null;
   rootIds: string[];
   nodes: Record<string, ConvoNode>;
 };

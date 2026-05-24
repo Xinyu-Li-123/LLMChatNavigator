@@ -38,6 +38,10 @@
 
 - [ ] Add a virtual head node so that branching on first message work
 
+- [ ] If user switch branch directly in the webpage, it won't be reflected in our UI
+
+  While we can poll to check the webpage html in syncConvo to achieve this, this bug can only be reliably fixed by implementing the subscribe() method in the convo controller interface.
+
 - [x] `data-turn-id-container` and `data-message-id` are two different values. One turn can contain multiple messages from chatgpt, e.g. it first make tool call, then produce CoT, and finally output answer, making it 3 messages in one turn.
 
 - [x] ChatGPT has pagination in infinite-scroll style. We need some way to allow navigating to messages that are not loaded in current page

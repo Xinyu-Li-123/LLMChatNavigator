@@ -70,10 +70,37 @@ function getPathToRoot(
   return path.reverse();
 }
 
+function getPathToTreeRoot(
+  nodeId: string | null,
+  tree: Pick<ConvoTree, 'nodes'>,
+): string[] {
+  const path: string[] = [];
+  const seen = new Set<string>();
+  let current = nodeId;
+
+  while (current && tree.nodes[current] && !seen.has(current)) {
+    seen.add(current);
+    path.push(current);
+    current = tree.nodes[current].parentId;
+  }
+
+  return path.reverse();
+}
+
+export function applyCurrentPathState(tree: ConvoTree, curNodeId: string | null): ConvoTree {
+  const currentPathSet = new Set(getPathToTreeRoot(curNodeId, tree));
+
+  for (const node of Object.values(tree.nodes)) {
+    node.isCurrentPath = currentPathSet.has(node.id);
+  }
+
+  tree.uiCurNodeId = curNodeId;
+  return tree;
+}
+
 export function buildChatGptConversationTree(raw: ChatGptConversationResponse): ConvoTree {
   const mapping = raw.mapping ?? {};
-  const currentPath = getPathToRoot(raw.current_node ?? null, mapping);
-  const currentPathSet = new Set(currentPath);
+  const backendCurNodeId = raw.current_node ?? null;
   const nodes: Record<string, ConvoNode> = {};
 
   for (const [id, rawNode] of Object.entries(mapping)) {
@@ -89,7 +116,7 @@ export function buildChatGptConversationTree(raw: ChatGptConversationResponse): 
       parentId,
       childIds: rawNode.children ?? [],
       siblingIndex: siblings.indexOf(id),
-      isCurrentPath: currentPathSet.has(id),
+      isCurrentPath: false,
       isVisible: true,
       createTime: rawNode.message?.create_time ?? null,
     };
@@ -103,7 +130,8 @@ export function buildChatGptConversationTree(raw: ChatGptConversationResponse): 
     provider: 'chatgpt',
     conversationId: raw.id ?? '',
     title: raw.title ?? 'ChatGpt conversation',
-    currentNodeId: raw.current_node ?? null,
+    backendCurNodeId,
+    uiCurNodeId: backendCurNodeId,
     rootIds,
     nodes,
   };
@@ -113,7 +141,10 @@ export function buildConvoSnapshotFromChatGptResponse(
   response: ChatGptConversationResponse,
   convoUrl = location.href,
 ): ConvoSnapshot {
-  const tree = buildChatGptConversationTree(response);
+  const tree = applyCurrentPathState(
+    buildChatGptConversationTree(response),
+    response.current_node ?? null,
+  );
 
   return {
     convoMetadata: {
@@ -121,7 +152,6 @@ export function buildConvoSnapshotFromChatGptResponse(
       convoTitle: tree.title,
       convoUrl,
     },
-    curNodeId: tree.currentNodeId,
     tree,
   };
 }

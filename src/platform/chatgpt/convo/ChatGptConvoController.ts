@@ -4,6 +4,7 @@ import type { ConvoSnapshot } from '@/src/convo/types';
 import type { ApiResult, ChatGptConversationResponse, ConvoNode, ConvoTree, MessageRole } from '@/src/shared/types';
 import { ensure, ensureNotNull } from '@/src/utils';
 import {
+  applyCurrentPathState,
   buildConvoSnapshotFromChatGptResponse,
   getChatGptConversationIdFromUrl,
 } from './ChatGptConvoTreeBuilder';
@@ -414,23 +415,23 @@ class BranchStep implements NavStep {
 class ChatGptHtmlMsgTree {
   constructor(private readonly tree: ConvoTree) { }
 
-  computeNavPath(fromNodeId: string, toNodeId: string): NavStep[] {
-    const fromPath = this.getPathToRoot(fromNodeId);
-    const targetPath = this.getPathToRoot(toNodeId);
+  computeNavPath(srcNodeId: string, tgtNodeId: string): NavStep[] {
+    const srcPath = this.getPathToRoot(srcNodeId);
+    const targetPath = this.getPathToRoot(tgtNodeId);
     const steps: NavStep[] = [];
 
     let divergenceIdx = 0;
     while (
-      divergenceIdx < fromPath.length &&
+      divergenceIdx < srcPath.length &&
       divergenceIdx < targetPath.length &&
-      fromPath[divergenceIdx] === targetPath[divergenceIdx]
+      srcPath[divergenceIdx] === targetPath[divergenceIdx]
     ) {
       divergenceIdx += 1;
     }
 
     if (divergenceIdx > 0) {
-      let scrollSourceNodeId = fromNodeId;
-      let activePath = fromPath;
+      let scrollSourceNodeId = srcNodeId;
+      let activePath = srcPath;
 
       for (let index = divergenceIdx - 1; index < targetPath.length - 1; index++) {
         const parentId = targetPath[index];
@@ -455,14 +456,17 @@ class ChatGptHtmlMsgTree {
         }
       }
 
-      steps.push(new ScrollStep(this.getScrollPath(scrollSourceNodeId, toNodeId)));
+      steps.push(new ScrollStep(this.getScrollPath(scrollSourceNodeId, tgtNodeId)));
       return steps;
     }
 
-    steps.push(new ScrollStep(this.getScrollPath(fromNodeId, toNodeId)));
+    steps.push(new ScrollStep(this.getScrollPath(srcNodeId, tgtNodeId)));
     return steps;
   }
 
+  /**
+   * Return a path from root node to the given node, as a sequence of nodes
+   */
   private getPathToRoot(nodeId: string): string[] {
     const path: string[] = [];
     const seen = new Set<string>();
@@ -546,18 +550,29 @@ export default class ChatGptConvoController implements ConvoController {
 
   async syncConvo(): Promise<void> {
     const response = await this.fetchRawConversation();
-    this.snapshot = buildConvoSnapshotFromChatGptResponse(response, location.href);
+    const nextSnapshot = buildConvoSnapshotFromChatGptResponse(response, location.href);
+    const preservedUiCurNodeId = this.snapshot?.tree.uiCurNodeId;
+    const nextUiCurNodeId =
+      preservedUiCurNodeId && nextSnapshot.tree.nodes[preservedUiCurNodeId]
+        ? preservedUiCurNodeId
+        : nextSnapshot.tree.backendCurNodeId;
+
+    applyCurrentPathState(nextSnapshot.tree, nextUiCurNodeId);
+    this.snapshot = nextSnapshot;
   }
 
   async navigateToNode(targetNodeId: string): Promise<void> {
     const snapshot = await this.ensureSnapshot();
-    const curNodeId = snapshot.curNodeId;
-    ensureNotNull(curNodeId, 'Cannot navigate because the current conversation node is unknown.');
+    const uiCurNodeId = snapshot.tree.uiCurNodeId;
+    ensureNotNull(uiCurNodeId, 'Cannot navigate because the current conversation node is unknown.');
 
-    const navPath = new ChatGptHtmlMsgTree(snapshot.tree).computeNavPath(curNodeId, targetNodeId);
+    const navPath = new ChatGptHtmlMsgTree(snapshot.tree).computeNavPath(uiCurNodeId, targetNodeId);
     for (const navStep of navPath) {
       await navStep.execute();
     }
+    applyCurrentPathState(snapshot.tree, targetNodeId);
+    // TODO: This only tracks controller-driven navigation. If the user switches branches
+    // directly in ChatGPT's UI, uiCurNodeId becomes stale until we add live DOM observation.
   }
 
   async submitReply(parentNodeId: string, text: string): Promise<void> {
