@@ -1,3 +1,6 @@
+// TODO: Modularize this UI so that we can add ChatNavPopupWindowUi
+// which creates a popup window user can drag to a second screen
+
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { FolderTree, Maximize2, MessagesSquare, Minimize2, Minus } from 'lucide-react';
 
@@ -18,8 +21,7 @@ import {
   type ProviderUiConfig,
 } from '@/src/shared/navigatorUiConfig';
 import ConversationNavigator from '@/src/ui/ConversationNavigator';
-import type { NavigatorApi } from '@/src/ui/ConversationNavigator';
-import { editMessage, fetchNavigatorSnapshot, navigateToNode, submitReply } from './chatgptContentApi';
+import type { ConvoController } from '@/src/convo/ConvoController';
 
 type PaneRect = {
   left: number;
@@ -57,11 +59,8 @@ const RESIZE_HANDLES: ResizeHandle[] = [
   { key: 'bottom-left', x: -1, y: 1, className: 'bottom-0 left-0 h-4 w-4 cursor-nesw-resize' },
 ];
 
-const contentApi: NavigatorApi = {
-  fetchSnapshot: fetchNavigatorSnapshot,
-  navigateToNode,
-  editMessage,
-  submitReply,
+type ChatGptFloatingUiProps = {
+  controller: ConvoController;
 };
 
 function getDefaultPosition(): Position {
@@ -196,7 +195,10 @@ async function loadLegacyButtonPosition(): Promise<Position | null> {
   return typeof saved?.x === 'number' && typeof saved?.y === 'number' ? saved : null;
 }
 
-export default function ChatGptFloatingUi() {
+/**
+ * A floating overlay that display the LLMChatNavigator UI. Can be expanded / collapsed by a button.
+ */
+export default function ChatNavFloatingUi({ controller }: ChatGptFloatingUiProps) {
   const defaultExtensionConfig = useMemo(() => defaultExtensionUiConfig(), []);
   const defaultConfig = useMemo(() => defaultProviderUiConfig(), []);
   // TODO: position is part of the provider ui config, since we may want different window size and positiion on different websites
@@ -204,6 +206,7 @@ export default function ChatGptFloatingUi() {
   const [open, setOpen] = useState(false);
   const [hasOpened, setHasOpened] = useState(false);
   const [theme, setTheme] = useState<NavigatorTheme>(defaultExtensionConfig.theme);
+  const [isDebug, setIsDebug] = useState(defaultExtensionConfig.isDebug);
   const [prefersDark, setPrefersDark] = useState(() => systemPrefersDark());
   const [conversationTitle, setConversationTitle] = useState('Current conversation');
   const [utilityRowCollapsed, setUtilityRowCollapsed] = useState(defaultExtensionConfig.utilityRowCollapsed);
@@ -269,6 +272,7 @@ export default function ChatGptFloatingUi() {
       const nextPosition = clampPosition(savedConfig.floatingButtonPosition ?? legacyPosition ?? getDefaultPosition());
       const nextPaneRect = paneRectFromConfig(savedConfig.pane);
       setTheme(savedExtensionConfig.theme);
+      setIsDebug(savedExtensionConfig.isDebug);
       setUtilityRowCollapsed(savedExtensionConfig.utilityRowCollapsed);
       setPosition(nextPosition);
       setPaneSide(savedConfig.pane.side);
@@ -319,12 +323,17 @@ export default function ChatGptFloatingUi() {
 
   function handleThemeChange(next: NavigatorTheme) {
     setTheme(next);
-    void saveExtensionUiConfig({ theme: next, utilityRowCollapsed });
+    void saveExtensionUiConfig({ theme: next, isDebug, utilityRowCollapsed });
+  }
+
+  function handleDebugChange(next: boolean) {
+    setIsDebug(next);
+    void saveExtensionUiConfig({ theme, isDebug: next, utilityRowCollapsed });
   }
 
   function handleUtilityRowCollapsedChange(collapsed: boolean) {
     setUtilityRowCollapsed(collapsed);
-    void saveExtensionUiConfig({ theme, utilityRowCollapsed: collapsed });
+    void saveExtensionUiConfig({ theme, isDebug, utilityRowCollapsed: collapsed });
   }
 
   function handleDragPointerDown(event: ReactPointerEvent<HTMLElement>, mode: 'button' | 'pane') {
@@ -532,10 +541,12 @@ export default function ChatGptFloatingUi() {
 
           <div className="min-h-0 flex-1 overflow-hidden rounded-xl bg-background">
             <ConversationNavigator
-              api={contentApi}
+              controller={controller}
               compact
               theme={theme}
               onThemeChange={handleThemeChange}
+              isDebug={isDebug}
+              onDebugChange={handleDebugChange}
               utilityRowCollapsed={utilityRowCollapsed}
               onUtilityRowCollapsedChange={handleUtilityRowCollapsedChange}
               onTitleChange={setConversationTitle}
