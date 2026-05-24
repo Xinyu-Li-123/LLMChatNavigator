@@ -249,9 +249,42 @@ function layoutDisplayTree(
 function MessageNode({ data }: NodeProps<MessageFlowNode>) {
   if (data.isVirtualRoot) {
     return (
-      <div className="flex h-[124px] w-[260px] items-center justify-center">
+      <div
+        className={cn(
+          'relative flex h-[124px] w-[260px] flex-col overflow-hidden rounded-lg border bg-card p-3 text-card-foreground shadow-sm transition-shadow',
+          data.node.isCurrentPath && 'border-primary/40',
+        )}
+      >
         <Handle type="target" position={FlowPosition.Top} className="opacity-0" />
-        <div className="h-5 w-16 rounded-full border border-dashed border-muted-foreground/40 bg-muted/30" />
+        <div className="mb-2 flex min-w-0 items-center gap-1">
+          {data.displayedChildCount > 1 ? (
+            <span className="rounded bg-amber-500/10 px-1.5 py-0.5 text-[10px] text-amber-700 dark:text-amber-300">
+              {data.displayedChildCount} branches
+            </span>
+          ) : null}
+        </div>
+        <div className="relative flex-1 overflow-hidden rounded-md border border-dashed border-muted-foreground/20 bg-muted/20">
+          <div className="absolute inset-0 opacity-50">
+            {Array.from({ length: 10 }, (_, index) => (
+              <div
+                key={index}
+                className="absolute h-px bg-muted-foreground/50"
+                style={{
+                  width: '180%',
+                  left: '-40%',
+                  top: `${index * 16 - 8}px`,
+                  transform: 'rotate(-32deg)',
+                  transformOrigin: 'center',
+                }}
+              />
+            ))}
+          </div>
+        </div>
+        {data.isDebug ? (
+          <div className="mt-2 truncate text-[10px] text-muted-foreground">
+            {data.node.id}
+          </div>
+        ) : null}
         <Handle type="source" position={FlowPosition.Bottom} className="opacity-0" />
       </div>
     );

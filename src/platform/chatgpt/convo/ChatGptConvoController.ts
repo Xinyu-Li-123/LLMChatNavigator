@@ -251,7 +251,7 @@ class ScrollStep implements NavStep {
       await scrollChatGptMessageElement(rendered.element, this.path.block);
       const mutated = await mutationPromise;
       if (!mutated) {
-        throw new Error(`Failed to execute ScrollStep for message ${this.targetNodeId}: can't proceed any further along the path from current message to target message because scrolling to top / bottom didn't lead to new elements being rendered within timeout of ${mutTimeout}ms. This could either because timeout is too short or something is wrong with the webpage`);
+        throw new Error(`Failed to execute ScrollStep for message ${this.targetNodeId}: can't proceed any further along the path from current message to target message because scrolling to top / bottom didn't lead to new elements being rendered within timeout of ${mutTimeout}ms. This could because timeout is too short, something is wrong with the webpage, or a bug in the codebase.`);
       }
     }
     throw new Error(`Failed to execute ScrollStep for message ${this.targetNodeId}: You shouldn't be able to reach this point.`);
