@@ -240,7 +240,7 @@ class ScrollStep implements NavStep {
       }
 
       lastRenderedIndex = rendered.index;
-      const mutTimeout = 2500;
+      const mutTimeout = 10000;
       const root = document.querySelector('main') ?? document.body;
       const mutationPromise = waitForFirstAddedMessageNode(root, mutTimeout);
       await scrollChatGptMessageElement(rendered.element, this.path.block);
